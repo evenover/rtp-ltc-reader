@@ -8,6 +8,7 @@ const MULTICAST = config.MULTICAST;
 const PORT = config.PORT;
 const IFACE = config.IFACE;
 const CHANNELS = config.CHANNELS;
+const CHANNEL_INFO = config.CHANNEL_INFO;
 
 const app = express();
 const server = app.listen(3000, () =>
@@ -79,12 +80,13 @@ wss.on('connection', (ws, req) => {
     .filter(n => n >= 0 && n < CHANNELS);
 
   const interval = setInterval(() => {
-    const payload = channels.map(ch => ({
-      channel: ch + 1,
-      tc: latestTC[ch]
-    }));
-    ws.send(JSON.stringify(payload));
-  }, 40);
+  const payload = channels.map(ch => ({
+    channel: ch + 1,
+    name: CHANNEL_INFO[ch].name,
+    tc: latestTC[ch]
+  }));
+  ws.send(JSON.stringify(payload));
+}, 40);
 
   ws.on('close', () => clearInterval(interval));
 });

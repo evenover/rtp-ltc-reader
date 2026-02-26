@@ -13,11 +13,21 @@ body {
   gap:2vw;
   height:100vh;
 }
+
 .clock {
   display:flex;
+  flex-direction:column;
   justify-content:center;
   align-items:center;
-  font-size:10vw;
+}
+
+.name {
+  font-size:2vw;
+  opacity:0.7;
+}
+
+.timecode {
+  font-size:8vw;
 }
 </style>
 </head>
@@ -31,19 +41,29 @@ ws.onmessage = (e) => {
   const clocks = JSON.parse(e.data);
 
   if (grid.children.length === 0) {
-    grid.style.gridTemplateColumns = 
+    grid.style.gridTemplateColumns =
       clocks.length > 1 ? "1fr 1fr" : "1fr";
 
     clocks.forEach(c => {
-      const div = document.createElement("div");
-      div.className = "clock";
-      div.id = "ch" + c.channel;
-      grid.appendChild(div);
+      const wrapper = document.createElement("div");
+      wrapper.className = "clock";
+      wrapper.id = "ch" + c.channel;
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.innerText = c.name;
+
+      const tc = document.createElement("div");
+      tc.className = "timecode";
+
+      wrapper.appendChild(name);
+      wrapper.appendChild(tc);
+      grid.appendChild(wrapper);
     });
   }
 
   clocks.forEach(c => {
-    const el = document.getElementById("ch" + c.channel);
+    const el = document.querySelector("#ch" + c.channel + " .timecode");
     if (el) el.innerText = c.tc;
   });
 };
