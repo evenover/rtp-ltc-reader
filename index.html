@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LTC</title>
+<style>
+body {
+  margin:0;
+  background:black;
+  color:white;
+  font-family:monospace;
+  display:grid;
+  gap:2vw;
+  height:100vh;
+}
+.clock {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  font-size:10vw;
+}
+</style>
+</head>
+<body id="grid"></body>
+
+<script>
+const ws = new WebSocket("ws://" + location.host + location.pathname);
+const grid = document.getElementById("grid");
+
+ws.onmessage = (e) => {
+  const clocks = JSON.parse(e.data);
+
+  if (grid.children.length === 0) {
+    grid.style.gridTemplateColumns = 
+      clocks.length > 1 ? "1fr 1fr" : "1fr";
+
+    clocks.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "clock";
+      div.id = "ch" + c.channel;
+      grid.appendChild(div);
+    });
+  }
+
+  clocks.forEach(c => {
+    const el = document.getElementById("ch" + c.channel);
+    if (el) el.innerText = c.tc;
+  });
+};
+</script>
+</html>
