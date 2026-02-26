@@ -35,17 +35,23 @@ Edit `config.json` to match your network setup:
     "MULTICAST": "239.255.0.1",
     "PORT": 5004,
     "IFACE": "192.168.1.2",
-    "CHANNELS": 16
+    "CHANNELS": 16,
+    "CHANNEL_INFO": [
+      { "name": "Program LTC" },
+      { "name": "Backup LTC" },
+      ...
+    ]
   }
 ]
 ```
 
-| Key          | Description                                    |
-|--------------|------------------------------------------------|
-| `MULTICAST`  | Multicast group address to join                |
-| `PORT`       | UDP port for the RTP stream                    |
-| `IFACE`      | Local network interface IP to bind to          |
-| `CHANNELS`   | Number of audio channels in the RTP stream     |
+| Key             | Description                                    |
+|-----------------|------------------------------------------------|
+| `MULTICAST`     | Multicast group address to join                |
+| `PORT`          | UDP port for the RTP stream                    |
+| `IFACE`         | Local network interface IP to bind to          |
+| `CHANNELS`      | Number of audio channels in the RTP stream     |
+| `CHANNEL_INFO`  | Array of objects (one per channel) with a `name` field used as the display label in the web UI |
 
 ## Usage
 
