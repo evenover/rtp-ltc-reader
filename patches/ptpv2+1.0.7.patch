@@ -1,0 +1,48 @@
+diff --git a/node_modules/ptpv2/ptp.js b/node_modules/ptpv2/ptp.js
+index f5dd89c..42ffff9 100644
+--- a/node_modules/ptpv2/ptp.js
++++ b/node_modules/ptpv2/ptp.js
+@@ -12,6 +12,7 @@ var minSyncInterval = 10000; // in ms
+ var ptpClientEvent = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+ var ptpClientGeneral = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+ var ptpMulticastAddrs = ['224.0.1.129', '224.0.1.130', '224.0.1.131', '224.0.1.132'];
++function ptpMulticastAddr() { return '224.0.1.129'; }
+ 
+ //vars
+ var t1, ts1, t2, ts2;
+@@ -72,7 +73,7 @@ exports.init = function(interface, domain, callback){
+ 
+ //event msg client
+ ptpClientEvent.on('listening', function() {
+-	ptpClientEvent.addMembership(ptpMulticastAddrs[ptp_domain], addr);
++	ptpClientEvent.addMembership(ptpMulticastAddr(), addr);
+ });
+ 
+ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -121,7 +122,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+ 		t1 = [tsS, tsNS];
+ 
+ 		//send delay_req
+-		ptpClientEvent.send(ptp_delay_req(), 319, ptpMulticastAddrs[ptp_domain], function(){
++		ptpClientEvent.send(ptp_delay_req(), 319, ptpMulticastAddr(), function(){
+ 			t2 = getCorrectedTime();
+ 		});
+ 
+@@ -131,7 +132,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+ 
+ //general msg Client
+ ptpClientGeneral.on('listening', function() {
+-	ptpClientGeneral.addMembership(ptpMulticastAddrs[ptp_domain], addr);
++	ptpClientGeneral.addMembership(ptpMulticastAddr(), addr);
+ });
+ 
+ ptpClientGeneral.on('message', function(buffer, remote) {
+@@ -162,7 +163,7 @@ ptpClientGeneral.on('message', function(buffer, remote) {
+ 		t1 = [tsS, tsNS];
+ 
+ 		//send delay_req
+-		ptpClientEvent.send(ptp_delay_req(), 319, ptpMulticastAddrs[ptp_domain], function(){
++		ptpClientEvent.send(ptp_delay_req(), 319, ptpMulticastAddr(), function(){
+ 			t2 = getCorrectedTime();
+ 		});
+ 

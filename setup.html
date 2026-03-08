@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Setup</title>
+<style>
+body {
+  margin: 0;
+  background: #1a1a1a;
+  color: #eee;
+  font-family: monospace;
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+label {
+  display: block;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+input, select {
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #eee;
+  font-family: monospace;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.tz-wrapper {
+  position: relative;
+  margin-top: 0.25rem;
+}
+
+.tz-wrapper input {
+  margin-top: 0;
+}
+
+.tz-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-top: none;
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.tz-dropdown.open {
+  display: block;
+}
+
+.tz-option {
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.tz-option:hover, .tz-option.active {
+  background: #444;
+}
+
+.channel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.channel-row input {
+  flex: 1;
+}
+
+.channel-row span {
+  opacity: 0.5;
+  font-size: 0.8rem;
+  min-width: 2rem;
+}
+
+button {
+  padding: 0.6rem 1.5rem;
+  background: #0a0;
+  color: #fff;
+  border: none;
+  font-family: monospace;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0c0;
+}
+
+button.add-btn {
+  background: #555;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  margin-top: 0.5rem;
+}
+
+button.add-btn:hover {
+  background: #777;
+}
+
+button.remove-btn {
+  background: #a00;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+  margin: 0;
+}
+
+button.remove-btn:hover {
+  background: #c00;
+}
+
+.msg {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.msg.ok { color: #0f0; }
+.msg.err { color: #f00; }
+
+fieldset {
+  border: 1px solid #444;
+  padding: 0.75rem;
+  margin-top: 1rem;
+}
+
+legend {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.status-panel {
+  border: 1px solid #444;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background: #222;
+}
+
+.status-panel h2 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #333;
+  font-size: 0.85rem;
+}
+
+.status-row:last-child {
+  border-bottom: none;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.dot.green { background: #0f0; }
+.dot.red { background: #f00; }
+.dot.yellow { background: #ff0; }
+.dot.grey { background: #666; }
+
+.status-panel a {
+  color: #4af;
+  text-decoration: none;
+}
+
+.status-panel a:hover {
+  text-decoration: underline;
+}
+
+.restart-btn {
+  background: none;
+  color: #aaa;
+  border: none;
+  font-size: 1rem;
+  padding: 0;
+  cursor: pointer;
+  margin-left: 0.4rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.restart-btn:hover {
+  color: #fff;
+}
+
+.restart-all-btn {
+  background: #555;
+  color: #fff;
+  border: none;
+  font-family: monospace;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  margin-top: 0.75rem;
+  display: block;
+  width: 100%;
+}
+
+.restart-all-btn:hover {
+  background: #777;
+}
+
+.sdp-section {
+  border: 1px solid #444;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: #222;
+}
+
+.sdp-section h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.sdp-section textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.5rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #eee;
+  font-family: monospace;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.sdp-section button {
+  margin-top: 0.5rem;
+  background: #36a;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+}
+
+.sdp-section button:hover {
+  background: #48c;
+}
+
+.sdp-msg {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.sdp-msg.ok { color: #0f0; }
+.sdp-msg.err { color: #f00; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Setup</h1>
+
+  <div class="status-panel">
+    <h2>Status</h2>
+    <div class="status-row">
+      <span>PTP Sync</span>
+      <span id="ptp-status"><span class="dot grey"></span>Connecting...</span>
+    </div>
+    <div id="channel-status"></div>
+    <button class="restart-all-btn" onclick="restartAll()" title="Restart all channels">&#x21bb; Restart All</button>
+  </div>
+
+  <div class="status-panel">
+    <h2>Clock Pages</h2>
+    <div id="nav-links">
+      <div class="status-row"><a href="/ptp" target="_blank">PTP Clock</a></div>
+    </div>
+  </div>
+
+  <label>PTP Interface (IFACE)</label>
+  <select id="iface"></select>
+
+  <label>Multicast Interface (MCIFACE) — leave same as IFACE if unsure</label>
+  <select id="mciface"></select>
+
+  <div class="sdp-section">
+    <h2>Import from SDP</h2>
+    <textarea id="sdp-input" placeholder="Paste SDP content here..."></textarea>
+    <button onclick="importSdp()">Import</button>
+    <div id="sdp-msg" class="sdp-msg"></div>
+  </div>
+
+  <label>Source Multicast Address</label>
+  <input id="sourcemulticast" type="text" placeholder="239.255.0.1">
+
+  <label>Source IP (leave empty if not using SSM)</label>
+  <input id="sourceip" type="text" placeholder="10.151.5.226">
+
+  <label>Multicast Port</label>
+  <input id="mcport" type="number" placeholder="5004">
+
+  <label>Encoding</label>
+  <select id="encoding">
+    <option value="L24">L24 (24-bit)</option>
+    <option value="L16">L16 (16-bit)</option>
+  </select>
+
+  <label>Sample Rate (Hz)</label>
+  <input id="samplerate" type="number" placeholder="48000">
+
+  <label>RTP Stream Size (number of channels in stream)</label>
+  <input id="streamsize" type="number" min="1" max="64" placeholder="16">
+
+  <label>PTP Domain (0–127)</label>
+  <input id="domain" type="number" min="0" max="127" placeholder="0">
+
+  <label>Timezone</label>
+  <div class="tz-wrapper">
+    <input id="timezone" autocomplete="off" placeholder="Start typing...">
+    <div id="tz-dropdown" class="tz-dropdown"></div>
+  </div>
+
+  <label>Decode Channels</label>
+  <input id="channels" type="number" min="1" max="64" placeholder="16">
+
+  <fieldset>
+    <legend>Channel Names</legend>
+    <div id="channel-list"></div>
+    <button class="add-btn" onclick="addChannel()">+ Add Channel</button>
+  </fieldset>
+
+  <button onclick="save()">Save</button>
+  <div id="msg" class="msg"></div>
+</div>
+
+<script>
+const timezones = Intl.supportedValuesOf('timeZone');
+const tzInput = document.getElementById('timezone');
+const tzDropdown = document.getElementById('tz-dropdown');
+
+function renderTzOptions(filter) {
+  const query = (filter || '').toLowerCase();
+  const matches = query ? timezones.filter(tz => tz.toLowerCase().includes(query)) : timezones;
+  tzDropdown.innerHTML = '';
+  matches.slice(0, 50).forEach(tz => {
+    const div = document.createElement('div');
+    div.className = 'tz-option';
+    div.textContent = tz;
+    div.onmousedown = (e) => {
+      e.preventDefault();
+      tzInput.value = tz;
+      tzDropdown.classList.remove('open');
+    };
+    tzDropdown.appendChild(div);
+  });
+}
+
+tzInput.addEventListener('focus', () => {
+  renderTzOptions(tzInput.value);
+  tzDropdown.classList.add('open');
+});
+
+tzInput.addEventListener('input', () => {
+  renderTzOptions(tzInput.value);
+  tzDropdown.classList.add('open');
+});
+
+tzInput.addEventListener('blur', () => {
+  tzDropdown.classList.remove('open');
+});
+
+function importSdp() {
+  const sdp = document.getElementById('sdp-input').value;
+  const msg = document.getElementById('sdp-msg');
+  const fields = [];
+
+  // Connection address: c=IN IP4 239.255.0.1/32
+  const cMatch = sdp.match(/^c=IN\s+IP[46]\s+([\d.]+)/m);
+  if (cMatch) {
+    document.getElementById('sourcemulticast').value = cMatch[1];
+    fields.push('Multicast Address');
+  }
+
+  // Media line: m=audio 5004 RTP/AVP 98
+  const mMatch = sdp.match(/^m=audio\s+(\d+)\s+/m);
+  if (mMatch) {
+    document.getElementById('mcport').value = mMatch[1];
+    fields.push('Port');
+  }
+
+  // rtpmap: a=rtpmap:98 L24/48000/4
+  const rtpMatch = sdp.match(/^a=rtpmap:\d+\s+([A-Za-z0-9]+)\/(\d+)(?:\/(\d+))?/m);
+  if (rtpMatch) {
+    document.getElementById('encoding').value = rtpMatch[1];
+    fields.push('Encoding');
+    document.getElementById('samplerate').value = rtpMatch[2];
+    fields.push('Sample Rate');
+    if (rtpMatch[3]) {
+      document.getElementById('streamsize').value = rtpMatch[3];
+      fields.push('Stream Size');
+    }
+  }
+
+  // Source filter: a=source-filter: incl IN IP4 239.254.151.10 10.151.5.226
+  const sfMatch = sdp.match(/^a=source-filter:\s*incl\s+IN\s+IP[46]\s+\S+\s+([\d.]+)/m);
+  if (sfMatch) {
+    document.getElementById('sourceip').value = sfMatch[1];
+    fields.push('Source IP');
+  }
+
+  if (fields.length > 0) {
+    msg.className = 'sdp-msg ok';
+    msg.textContent = 'Imported: ' + fields.join(', ');
+  } else {
+    msg.className = 'sdp-msg err';
+    msg.textContent = 'Could not parse any stream details from SDP';
+  }
+}
+
+async function loadInterfaces() {
+  const res = await fetch('/api/interfaces');
+  const ifaces = await res.json();
+
+  [document.getElementById('iface'), document.getElementById('mciface')].forEach(sel => {
+    sel.innerHTML = '';
+    ifaces.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value = i.address;
+      opt.textContent = `${i.name} — ${i.address}`;
+      sel.appendChild(opt);
+    });
+  });
+
+  return ifaces;
+}
+
+function renderChannels(channelInfo) {
+  const list = document.getElementById('channel-list');
+  list.innerHTML = '';
+  channelInfo.forEach((ch, i) => {
+    const row = document.createElement('div');
+    row.className = 'channel-row';
+    row.innerHTML = `<span>${i + 1}</span><input type="text" value="${ch.name}" data-ch="${i}"><button class="remove-btn" onclick="removeChannel(${i})">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function addChannel() {
+  const list = document.getElementById('channel-list');
+  const idx = list.children.length;
+  const row = document.createElement('div');
+  row.className = 'channel-row';
+  row.innerHTML = `<span>${idx + 1}</span><input type="text" value="Channel ${idx + 1}" data-ch="${idx}"><button class="remove-btn" onclick="removeChannel(${idx})">✕</button>`;
+  list.appendChild(row);
+  document.getElementById('channels').value = list.children.length;
+}
+
+function removeChannel(idx) {
+  const list = document.getElementById('channel-list');
+  const inputs = list.querySelectorAll('input');
+  const names = Array.from(inputs).map(i => ({ name: i.value }));
+  names.splice(idx, 1);
+  renderChannels(names);
+  document.getElementById('channels').value = names.length;
+}
+
+async function load() {
+  await loadInterfaces();
+
+  const res = await fetch('/api/config');
+  const cfg = await res.json();
+
+  document.getElementById('iface').value = cfg.IFACE || '';
+  document.getElementById('mciface').value = cfg.MCIFACE || cfg.IFACE || '';
+  document.getElementById('sourcemulticast').value = cfg.SOURCEMULTICAST || '';
+  document.getElementById('sourceip').value = cfg.SOURCEIP || '';
+  document.getElementById('mcport').value = cfg.MCPORT || '';
+  document.getElementById('encoding').value = cfg.ENCODING || 'L24';
+  document.getElementById('samplerate').value = cfg.SAMPLERATE || 48000;
+  document.getElementById('streamsize').value = cfg.STREAMSIZE || 16;
+  document.getElementById('domain').value = cfg.DOMAIN ?? 0;
+  document.getElementById('timezone').value = cfg.TIMEZONE || 'UTC';
+  document.getElementById('channels').value = cfg.DECODECHANNELS || 1;
+
+  renderChannels(cfg.CHANNEL_INFO || []);
+}
+
+async function save() {
+  const channelInputs = document.querySelectorAll('#channel-list input');
+  const channelInfo = Array.from(channelInputs).map(i => ({ name: i.value }));
+
+  const currentCfg = await (await fetch('/api/config')).json();
+
+  const cfg = {
+    IFACE: document.getElementById('iface').value,
+    PORT: currentCfg.PORT,
+    MCIFACE: document.getElementById('mciface').value,
+    SOURCEMULTICAST: document.getElementById('sourcemulticast').value,
+    MCPORT: parseInt(document.getElementById('mcport').value),
+    STREAMSIZE: parseInt(document.getElementById('streamsize').value),
+    ENCODING: document.getElementById('encoding').value,
+    SAMPLERATE: parseInt(document.getElementById('samplerate').value),
+    SOURCEIP: document.getElementById('sourceip').value,
+    TIMEZONE: document.getElementById('timezone').value,
+    DOMAIN: parseInt(document.getElementById('domain').value),
+    DECODECHANNELS: parseInt(document.getElementById('channels').value),
+    CHANNEL_INFO: channelInfo
+  };
+
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg)
+  });
+
+  const result = await res.json();
+  const msg = document.getElementById('msg');
+  if (result.ok) {
+    msg.className = 'msg ok';
+    msg.textContent = 'Config saved. Restarting server...';
+    waitForRestart();
+  } else {
+    msg.className = 'msg err';
+    msg.textContent = 'Save failed';
+  }
+}
+
+function waitForRestart() {
+  const msg = document.getElementById('msg');
+  let attempts = 0;
+  const check = setInterval(async () => {
+    attempts++;
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        clearInterval(check);
+        msg.textContent = 'Server restarted. Reloading...';
+        setTimeout(() => location.reload(), 500);
+      }
+    } catch (e) {
+      if (attempts > 30) {
+        clearInterval(check);
+        msg.className = 'msg err';
+        msg.textContent = 'Server did not come back. Check manually.';
+      }
+    }
+  }, 1000);
+}
+
+async function restartChannel(ch) {
+  await fetch('/api/restart/' + ch, { method: 'POST' });
+}
+
+async function restartAll() {
+  await fetch('/api/restart', { method: 'POST' });
+}
+
+function connectStatus() {
+  const ws = new WebSocket('ws://' + location.host + '/status');
+
+  ws.onmessage = (e) => {
+    const status = JSON.parse(e.data);
+
+    const ptpEl = document.getElementById('ptp-status');
+    if (status.ptp.synced) {
+      ptpEl.innerHTML = `<span class="dot green"></span>Synced — Master: ${status.ptp.master}`;
+    } else {
+      ptpEl.innerHTML = '<span class="dot red"></span>Not synced';
+    }
+
+    const chEl = document.getElementById('channel-status');
+    chEl.innerHTML = '';
+    const navEl = document.getElementById('nav-links');
+    navEl.innerHTML = '<div class="status-row"><a href="/ptp" target="_blank">PTP Clock</a></div>';
+
+    status.channels.forEach(ch => {
+      let dotClass, label;
+      if (ch.pipeline === 'decoding' && ch.receiving) {
+        dotClass = 'green';
+        label = `Decoding — ${ch.tc}`;
+      } else if (ch.pipeline === 'running') {
+        dotClass = 'yellow';
+        label = 'Running (no LTC)';
+      } else if (ch.pipeline === 'starting') {
+        dotClass = 'yellow';
+        label = 'Starting...';
+      } else if (ch.pipeline === 'error') {
+        dotClass = 'red';
+        label = 'Error';
+      } else if (ch.pipeline === 'failed') {
+        dotClass = 'red';
+        label = `Failed (${ch.restarts}/${ch.maxRestarts} restarts)`;
+      } else {
+        dotClass = 'grey';
+        label = 'Stopped';
+      }
+
+      chEl.innerHTML += `<div class="status-row"><span>Ch ${ch.channel}: ${ch.name}</span><span><span class="dot ${dotClass}"></span>${label}<button class="restart-btn" onclick="restartChannel(${ch.channel})" title="Restart channel ${ch.channel}">&#x21bb;</button></span></div>`;
+      navEl.innerHTML += `<div class="status-row"><a href="/channel-${ch.channel}" target="_blank">Ch ${ch.channel}: ${ch.name}</a></div>`;
+    });
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ptp-status').innerHTML = '<span class="dot red"></span>Offline';
+    setTimeout(connectStatus, 2000);
+  };
+}
+
+load();
+connectStatus();
+</script>
+</body>
+</html>

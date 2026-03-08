@@ -1,26 +1,33 @@
 [
     {
-        "MULTICAST": "239.255.0.1",
-        "PORT": 5004,
-        "IFACE": "192.168.1.2",
-        "CHANNELS": 16,
+        "IFACE": "10.151.203.96",
+        "PORT": 5000,
+        "MCIFACE": "10.151.203.96",
+        "SOURCEMULTICAST": "239.254.151.10",
+        "MCPORT": 5004,
+        "STREAMSIZE": 16,
+        "ENCODING": "L24",
+        "SAMPLERATE": 48000,
+        "SOURCEIP": "",
+        "TIMEZONE": "Europe/Oslo",
+        "DOMAIN": 84,
+        "DECODECHANNELS": 4,
         "CHANNEL_INFO": [
-            { "name": "Program LTC" },
-            { "name": "Backup LTC" },
-            { "name": "Studio A" },
-            { "name": "Studio B" },
-            { "name": "OB Truck" },
-            { "name": "Spare 1" },
-            { "name": "Spare 2" },
-            { "name": "Spare 3" },
-            { "name": "Spare 4" },
-            { "name": "Spare 5" },
-            { "name": "Spare 6" },
-            { "name": "Spare 7" },
-            { "name": "Spare 8" },
-            { "name": "Spare 9" },
-            { "name": "Spare 10" },
-            { "name": "Spare 11" }
+            {
+                "name": "Program LTC"
+            },
+            {
+                "name": "Backup LTC"
+            },
+            {
+                "name": "Studio A"
+            },
+            {
+                "name": "Studio B"
+            },
+            {
+                "name": "OB Truck"
+            }
         ]
     }
 ]

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PTP Clock</title>
+<style>
+body {
+  margin:0;
+  background:black;
+  color:white;
+  font-family:monospace;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.time {
+  font-size:12vw;
+}
+
+.status {
+  font-size:2vw;
+  opacity:0.7;
+  margin-top:1vw;
+}
+
+.status.synced {
+  color:#0f0;
+}
+
+.status.not-synced {
+  color:#f00;
+}
+</style>
+</head>
+<body>
+
+<div class="time" id="time">--:--:--:--</div>
+<div class="status" id="status">Waiting for PTP sync...</div>
+
+<script>
+const ws = new WebSocket("ws://" + location.host + "/ptp");
+const timeEl = document.getElementById("time");
+const statusEl = document.getElementById("status");
+
+ws.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  timeEl.innerText = data.time;
+
+  if (data.synced) {
+    statusEl.className = "status synced";
+    statusEl.innerText = "PTP synced — Master: " + data.master + " — TZ: " + data.timezone;
+  } else {
+    statusEl.className = "status not-synced";
+    statusEl.innerText = "Not synced to PTP master";
+  }
+};
+</script>
+</body>
+</html>
