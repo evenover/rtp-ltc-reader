@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Combo Clock</title>
+<style>
+html, body {
+  margin:0;
+  background:black;
+  color:white;
+  font-family:monospace;
+  height:100vh;
+  overflow:hidden;
+}
+
+#grid {
+  display:grid;
+  height:100vh;
+  place-items:center;
+}
+
+.clock {
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+}
+
+.label {
+  font-size:2vw;
+  opacity:0.7;
+  display:flex;
+  align-items:center;
+  gap:0.5em;
+}
+
+.sync-ball {
+  display:inline-block;
+  width:0.8em;
+  height:0.8em;
+  border-radius:50%;
+  background:#f00;
+}
+
+.sync-ball.synced {
+  background:#0f0;
+}
+
+.sync-ball.hidden {
+  display:none;
+}
+
+.time {
+  font-size:16vw;
+}
+</style>
+</head>
+<body>
+
+<div id="grid"></div>
+
+<script>
+const wsPath = location.pathname.replace(/%2B/gi, '+').replace(/ /g, '+');
+const ws = new WebSocket("ws://" + location.host + wsPath);
+const grid = document.getElementById("grid");
+
+ws.onmessage = (e) => {
+  const clocks = JSON.parse(e.data);
+
+  if (grid.children.length === 0) {
+    const n = clocks.length;
+    if (n <= 2) {
+      grid.style.gridTemplateColumns = '1fr';
+      grid.style.gridTemplateRows = Array(n).fill('1fr').join(' ');
+    } else {
+      const cols = Math.ceil(n / 2);
+      grid.style.gridTemplateColumns = Array(cols).fill('1fr').join(' ');
+      grid.style.gridTemplateRows = '1fr 1fr';
+    }
+    if (n > 2) {
+      grid.querySelectorAll('.time').length === 0 && (grid.dataset.small = '1');
+    }
+    clocks.forEach(c => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "clock";
+      wrapper.dataset.id = c.id;
+
+      const label = document.createElement("div");
+      label.className = "label";
+      if (n > 4) label.style.fontSize = '0.8vw';
+      else if (n > 2) label.style.fontSize = '1vw';
+
+      const ball = document.createElement("span");
+      ball.className = "sync-ball" + (c.synced === null ? " hidden" : (c.synced ? " synced" : ""));
+
+      const text = document.createElement("span");
+      text.innerText = c.label;
+
+      label.appendChild(ball);
+      label.appendChild(text);
+
+      const time = document.createElement("div");
+      time.className = "time";
+      if (n > 4) time.style.fontSize = '5vw';
+      else if (n > 2) time.style.fontSize = '8vw';
+      time.innerText = c.time;
+
+      wrapper.appendChild(label);
+      wrapper.appendChild(time);
+      grid.appendChild(wrapper);
+    });
+  }
+
+  clocks.forEach(c => {
+    const el = grid.querySelector('[data-id="' + c.id + '"]');
+    if (!el) return;
+    el.querySelector(".time").innerText = c.time;
+    const ball = el.querySelector(".sync-ball");
+    if (c.synced === null) {
+      ball.className = "sync-ball hidden";
+    } else {
+      ball.className = c.synced ? "sync-ball synced" : "sync-ball";
+    }
+  });
+};
+</script>
+</body>
+</html>

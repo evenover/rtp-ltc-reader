@@ -11,41 +11,58 @@ body {
   font-family: monospace;
   display: flex;
   justify-content: center;
-  padding: 2rem;
+  padding: 1rem 1.5rem;
 }
 
 .container {
   width: 100%;
-  max-width: 600px;
+  max-width: 1100px;
 }
 
 h1 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+  margin: 0 0 0.75rem 0;
+}
+
+.top-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+}
+
+.form-grid .span2 {
+  grid-column: 1 / -1;
 }
 
 label {
   display: block;
-  margin-top: 1rem;
-  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
   opacity: 0.7;
 }
 
 input, select {
   width: 100%;
-  padding: 0.5rem;
-  margin-top: 0.25rem;
+  padding: 0.3rem 0.4rem;
+  margin-top: 0.15rem;
   background: #2a2a2a;
   border: 1px solid #444;
   color: #eee;
   font-family: monospace;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   box-sizing: border-box;
 }
 
 .tz-wrapper {
   position: relative;
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
 }
 
 .tz-wrapper input {
@@ -72,10 +89,10 @@ input, select {
 }
 
 .tz-option {
-  padding: 0.4rem 0.5rem;
+  padding: 0.3rem 0.4rem;
   cursor: pointer;
   font-family: monospace;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .tz-option:hover, .tz-option.active {
@@ -85,8 +102,8 @@ input, select {
 .channel-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
 }
 
 .channel-row input {
@@ -95,17 +112,17 @@ input, select {
 
 .channel-row span {
   opacity: 0.5;
-  font-size: 0.8rem;
-  min-width: 2rem;
+  font-size: 0.75rem;
+  min-width: 1.5rem;
 }
 
 button {
-  padding: 0.6rem 1.5rem;
+  padding: 0.4rem 1.2rem;
   background: #0a0;
   color: #fff;
   border: none;
   font-family: monospace;
-  font-size: 1rem;
+  font-size: 0.9rem;
   cursor: pointer;
 }
 
@@ -115,9 +132,9 @@ button:hover {
 
 button.add-btn {
   background: #555;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.8rem;
-  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  margin-top: 0.3rem;
 }
 
 button.add-btn:hover {
@@ -126,8 +143,8 @@ button.add-btn:hover {
 
 button.remove-btn {
   background: #a00;
-  font-size: 0.8rem;
-  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
   margin: 0;
 }
 
@@ -136,9 +153,9 @@ button.remove-btn:hover {
 }
 
 .msg {
-  margin-top: 1rem;
-  padding: 0.5rem;
-  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  padding: 0.3rem;
+  font-size: 0.85rem;
 }
 
 .msg.ok { color: #0f0; }
@@ -146,33 +163,33 @@ button.remove-btn:hover {
 
 fieldset {
   border: 1px solid #444;
-  padding: 0.75rem;
-  margin-top: 1rem;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0;
 }
 
 legend {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   opacity: 0.8;
 }
 
-.status-panel {
+.panel {
   border: 1px solid #444;
-  padding: 1rem;
-  margin-bottom: 1.5rem;
+  padding: 0.6rem;
   background: #222;
 }
 
-.status-panel h2 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.1rem;
+.panel h2 {
+  margin: 0 0 0.4rem 0;
+  font-size: 1rem;
 }
 
 .status-row {
   display: flex;
   justify-content: space-between;
-  padding: 0.3rem 0;
+  padding: 0.2rem 0;
   border-bottom: 1px solid #333;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 .status-row:last-child {
@@ -184,7 +201,7 @@ legend {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 0.4rem;
+  margin-right: 0.3rem;
   vertical-align: middle;
 }
 
@@ -193,12 +210,12 @@ legend {
 .dot.yellow { background: #ff0; }
 .dot.grey { background: #666; }
 
-.status-panel a {
+.panel a {
   color: #4af;
   text-decoration: none;
 }
 
-.status-panel a:hover {
+.panel a:hover {
   text-decoration: underline;
 }
 
@@ -206,10 +223,10 @@ legend {
   background: none;
   color: #aaa;
   border: none;
-  font-size: 1rem;
+  font-size: 0.9rem;
   padding: 0;
   cursor: pointer;
-  margin-left: 0.4rem;
+  margin-left: 0.3rem;
   line-height: 1;
   vertical-align: middle;
 }
@@ -223,10 +240,10 @@ legend {
   color: #fff;
   border: none;
   font-family: monospace;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
   cursor: pointer;
-  margin-top: 0.75rem;
+  margin-top: 0.4rem;
   display: block;
   width: 100%;
 }
@@ -235,49 +252,55 @@ legend {
   background: #777;
 }
 
-.sdp-section {
-  border: 1px solid #444;
-  padding: 0.75rem;
-  margin-bottom: 1rem;
-  background: #222;
+details.sdp-details {
+  margin-top: 0.5rem;
 }
 
-.sdp-section h2 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
+details.sdp-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-bottom: 0.3rem;
 }
 
-.sdp-section textarea {
+details.sdp-details textarea {
   width: 100%;
-  min-height: 120px;
-  padding: 0.5rem;
+  min-height: 80px;
+  padding: 0.4rem;
   background: #2a2a2a;
   border: 1px solid #444;
   color: #eee;
   font-family: monospace;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   box-sizing: border-box;
   resize: vertical;
 }
 
-.sdp-section button {
-  margin-top: 0.5rem;
+details.sdp-details button {
+  margin-top: 0.3rem;
   background: #36a;
-  font-size: 0.85rem;
-  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
 }
 
-.sdp-section button:hover {
+details.sdp-details button:hover {
   background: #48c;
 }
 
 .sdp-msg {
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
 }
 
 .sdp-msg.ok { color: #0f0; }
 .sdp-msg.err { color: #f00; }
+
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
 </style>
 </head>
 <body>
@@ -285,77 +308,130 @@ legend {
 <div class="container">
   <h1>Setup</h1>
 
-  <div class="status-panel">
-    <h2>Status</h2>
-    <div class="status-row">
-      <span>PTP Sync</span>
-      <span id="ptp-status"><span class="dot grey"></span>Connecting...</span>
+  <div class="top-row">
+    <div class="panel">
+      <h2>Status</h2>
+      <div class="status-row">
+        <a href="/ptp" target="_blank">PTP</a>
+        <span id="ptp-status"><span class="dot grey"></span>Connecting...</span>
+      </div>
+      <div class="status-row">
+        <a href="/ntp" target="_blank">NTP</a>
+        <span id="ntp-status"><span class="dot grey"></span>Connecting...</span>
+      </div>
+      <div class="status-row">
+        <a href="/clock" target="_blank">Clock</a>
+        <span id="clock-status"><span class="dot grey"></span>--:--:--</span>
+      </div>
+      <div id="channel-status"></div>
+      <button class="restart-all-btn" onclick="restartAll()" title="Restart all channels">&#x21bb; Restart All</button>
     </div>
-    <div id="channel-status"></div>
-    <button class="restart-all-btn" onclick="restartAll()" title="Restart all channels">&#x21bb; Restart All</button>
-  </div>
 
-  <div class="status-panel">
-    <h2>Clock Pages</h2>
-    <div id="nav-links">
-      <div class="status-row"><a href="/ptp" target="_blank">PTP Clock</a></div>
+    <div class="panel">
+      <h2>Internal Clock</h2>
+      <div style="display:flex;gap:0.4rem;align-items:center">
+        <input id="clock-time" type="time" step="1" style="flex:1">
+        <button onclick="setClock()" style="background:#36a;white-space:nowrap;font-size:0.8rem;padding:0.3rem 0.5rem">Set</button>
+        <button onclick="syncClockToSystem()" style="background:#555;white-space:nowrap;font-size:0.8rem;padding:0.3rem 0.5rem">System</button>
+      </div>
+      <div id="clock-current" style="margin-top:0.3rem;font-size:0.8rem;opacity:0.7">Current: --:--:--</div>
+      <div id="clock-msg" class="sdp-msg"></div>
     </div>
   </div>
 
-  <label>PTP Interface (IFACE)</label>
-  <select id="iface"></select>
+  <div class="form-grid">
+    <div>
+      <label>PTP Interface (IFACE)</label>
+      <select id="iface"></select>
+    </div>
+    <div>
+      <label>Multicast Interface (MCIFACE)</label>
+      <select id="mciface"></select>
+    </div>
 
-  <label>Multicast Interface (MCIFACE) — leave same as IFACE if unsure</label>
-  <select id="mciface"></select>
+    <div>
+      <label>Source Multicast Address</label>
+      <input id="sourcemulticast" type="text" placeholder="239.255.0.1">
+    </div>
+    <div>
+      <label>Source IP (empty = no SSM)</label>
+      <input id="sourceip" type="text" placeholder="10.151.5.226">
+    </div>
 
-  <div class="sdp-section">
-    <h2>Import from SDP</h2>
-    <textarea id="sdp-input" placeholder="Paste SDP content here..."></textarea>
-    <button onclick="importSdp()">Import</button>
-    <div id="sdp-msg" class="sdp-msg"></div>
+    <div>
+      <label>Multicast Port</label>
+      <input id="mcport" type="number" placeholder="5004">
+    </div>
+    <div>
+      <label>Encoding</label>
+      <select id="encoding">
+        <option value="L24">L24 (24-bit)</option>
+        <option value="L16">L16 (16-bit)</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Sample Rate (Hz)</label>
+      <input id="samplerate" type="number" placeholder="48000">
+    </div>
+    <div>
+      <label>Stream Size (channels in stream)</label>
+      <input id="streamsize" type="number" min="1" max="64" placeholder="16">
+    </div>
+
+    <div>
+      <label>PTP Domain (0–127)</label>
+      <input id="domain" type="number" min="0" max="127" placeholder="0">
+    </div>
+    <div>
+      <label>Leap Seconds Correction</label>
+      <input id="leapseconds" type="number" min="-10" max="10" placeholder="0">
+    </div>
+
+    <div>
+      <label>NTP Server</label>
+      <input id="ntpserver" type="text" placeholder="e.g. pool.ntp.org">
+    </div>
+    <div>
+      <label>Timezone</label>
+      <div class="tz-wrapper">
+        <input id="timezone" autocomplete="off" placeholder="Start typing...">
+        <div id="tz-dropdown" class="tz-dropdown"></div>
+      </div>
+    </div>
+
+    <div>
+      <label>Decode Channels</label>
+      <input id="channels" type="number" min="1" max="64" placeholder="16">
+    </div>
+    <div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:1.6rem">
+        <input id="showframes" type="checkbox" style="width:auto"> Show frames
+      </label>
+    </div>
+
+    <div class="span2">
+      <fieldset>
+        <legend>Channel Names</legend>
+        <div id="channel-list"></div>
+        <button class="add-btn" onclick="addChannel()">+ Add</button>
+      </fieldset>
+    </div>
+
+    <div class="span2">
+      <details class="sdp-details">
+        <summary>Import from SDP</summary>
+        <textarea id="sdp-input" placeholder="Paste SDP content here..."></textarea>
+        <button onclick="importSdp()">Import</button>
+        <div id="sdp-msg" class="sdp-msg"></div>
+      </details>
+    </div>
   </div>
 
-  <label>Source Multicast Address</label>
-  <input id="sourcemulticast" type="text" placeholder="239.255.0.1">
-
-  <label>Source IP (leave empty if not using SSM)</label>
-  <input id="sourceip" type="text" placeholder="10.151.5.226">
-
-  <label>Multicast Port</label>
-  <input id="mcport" type="number" placeholder="5004">
-
-  <label>Encoding</label>
-  <select id="encoding">
-    <option value="L24">L24 (24-bit)</option>
-    <option value="L16">L16 (16-bit)</option>
-  </select>
-
-  <label>Sample Rate (Hz)</label>
-  <input id="samplerate" type="number" placeholder="48000">
-
-  <label>RTP Stream Size (number of channels in stream)</label>
-  <input id="streamsize" type="number" min="1" max="64" placeholder="16">
-
-  <label>PTP Domain (0–127)</label>
-  <input id="domain" type="number" min="0" max="127" placeholder="0">
-
-  <label>Timezone</label>
-  <div class="tz-wrapper">
-    <input id="timezone" autocomplete="off" placeholder="Start typing...">
-    <div id="tz-dropdown" class="tz-dropdown"></div>
+  <div class="bottom-bar">
+    <button onclick="save()">Save</button>
+    <div id="msg" class="msg"></div>
   </div>
-
-  <label>Decode Channels</label>
-  <input id="channels" type="number" min="1" max="64" placeholder="16">
-
-  <fieldset>
-    <legend>Channel Names</legend>
-    <div id="channel-list"></div>
-    <button class="add-btn" onclick="addChannel()">+ Add Channel</button>
-  </fieldset>
-
-  <button onclick="save()">Save</button>
-  <div id="msg" class="msg"></div>
 </div>
 
 <script>
@@ -504,8 +580,11 @@ async function load() {
   document.getElementById('samplerate').value = cfg.SAMPLERATE || 48000;
   document.getElementById('streamsize').value = cfg.STREAMSIZE || 16;
   document.getElementById('domain').value = cfg.DOMAIN ?? 0;
+  document.getElementById('leapseconds').value = cfg.LEAPSECONDS ?? 0;
+  document.getElementById('ntpserver').value = cfg.NTPSERVER || '';
   document.getElementById('timezone').value = cfg.TIMEZONE || 'UTC';
   document.getElementById('channels').value = cfg.DECODECHANNELS || 1;
+  document.getElementById('showframes').checked = cfg.SHOWFRAMES !== false;
 
   renderChannels(cfg.CHANNEL_INFO || []);
 }
@@ -528,7 +607,10 @@ async function save() {
     SOURCEIP: document.getElementById('sourceip').value,
     TIMEZONE: document.getElementById('timezone').value,
     DOMAIN: parseInt(document.getElementById('domain').value),
+    LEAPSECONDS: parseInt(document.getElementById('leapseconds').value) || 0,
+    NTPSERVER: document.getElementById('ntpserver').value,
     DECODECHANNELS: parseInt(document.getElementById('channels').value),
+    SHOWFRAMES: document.getElementById('showframes').checked,
     CHANNEL_INFO: channelInfo
   };
 
@@ -593,10 +675,19 @@ function connectStatus() {
       ptpEl.innerHTML = '<span class="dot red"></span>Not synced';
     }
 
+    const ntpEl = document.getElementById('ntp-status');
+    if (status.ntp.server) {
+      if (status.ntp.synced) {
+        ntpEl.innerHTML = `<span class="dot green"></span>Synced — ${status.ntp.server}`;
+      } else {
+        ntpEl.innerHTML = `<span class="dot red"></span>Querying ${status.ntp.server}...`;
+      }
+    } else {
+      ntpEl.innerHTML = '<span class="dot grey"></span>No server configured';
+    }
+
     const chEl = document.getElementById('channel-status');
     chEl.innerHTML = '';
-    const navEl = document.getElementById('nav-links');
-    navEl.innerHTML = '<div class="status-row"><a href="/ptp" target="_blank">PTP Clock</a></div>';
 
     status.channels.forEach(ch => {
       let dotClass, label;
@@ -620,8 +711,7 @@ function connectStatus() {
         label = 'Stopped';
       }
 
-      chEl.innerHTML += `<div class="status-row"><span>Ch ${ch.channel}: ${ch.name}</span><span><span class="dot ${dotClass}"></span>${label}<button class="restart-btn" onclick="restartChannel(${ch.channel})" title="Restart channel ${ch.channel}">&#x21bb;</button></span></div>`;
-      navEl.innerHTML += `<div class="status-row"><a href="/channel-${ch.channel}" target="_blank">Ch ${ch.channel}: ${ch.name}</a></div>`;
+      chEl.innerHTML += `<div class="status-row"><span><a href="/channel-${ch.channel}" target="_blank">Ch ${ch.channel}: ${ch.name}</a></span><span><span class="dot ${dotClass}"></span>${label}<button class="restart-btn" onclick="restartChannel(${ch.channel})" title="Restart channel ${ch.channel}">&#x21bb;</button></span></div>`;
     });
   };
 
@@ -631,8 +721,55 @@ function connectStatus() {
   };
 }
 
+async function setClock() {
+  const val = document.getElementById('clock-time').value;
+  const msg = document.getElementById('clock-msg');
+  if (!val) { msg.className = 'sdp-msg err'; msg.textContent = 'Enter a time first'; return; }
+  const res = await fetch('/api/setclock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ time: val })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    msg.className = 'sdp-msg ok';
+    msg.textContent = 'Clock set to ' + val;
+  } else {
+    msg.className = 'sdp-msg err';
+    msg.textContent = data.error || 'Failed to set clock';
+  }
+}
+
+async function syncClockToSystem() {
+  const msg = document.getElementById('clock-msg');
+  const res = await fetch('/api/setclock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ time: null })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    msg.className = 'sdp-msg ok';
+    msg.textContent = 'Clock synced to system time';
+  }
+}
+
+function pollClock() {
+  setInterval(async () => {
+    try {
+      const res = await fetch('/api/clock');
+      const data = await res.json();
+      document.getElementById('clock-current').textContent = 'Current: ' + data.time;
+      const statusEl = document.getElementById('clock-status');
+      const offsetLabel = data.offset === 0 ? 'System time' : `Offset: ${(data.offset / 1000).toFixed(1)}s`;
+      statusEl.innerHTML = `<span class="dot green"></span>${data.time} (${offsetLabel})`;
+    } catch(e) {}
+  }, 500);
+}
+
 load();
 connectStatus();
+pollClock();
 </script>
 </body>
 </html>

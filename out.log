@@ -1,0 +1,26 @@
+PTP init: IFACE=10.151.5.226, DOMAIN=84
+Server på http://localhost:5000
+Pipeline 1 restarting (1/5)
+Pipeline 4 restarting (1/5)
+Pipeline 3 restarting (1/5)
+Pipeline 2 restarting (1/5)
+Pipeline 4 restarting (2/5)
+Pipeline 2 restarting (2/5)
+Pipeline 3 restarting (2/5)
+Pipeline 1 restarting (2/5)
+Pipeline 4 restarting (3/5)
+Pipeline 3 restarting (3/5)
+Pipeline 2 restarting (3/5)
+Pipeline 1 restarting (3/5)
+Pipeline 4 restarting (4/5)
+Pipeline 3 restarting (4/5)
+Pipeline 2 restarting (4/5)
+Pipeline 1 restarting (4/5)
+Pipeline 4 restarting (5/5)
+Pipeline 3 restarting (5/5)
+Pipeline 2 restarting (5/5)
+Pipeline 1 restarting (5/5)
+Pipeline 4 exceeded max restarts (5), stopped
+Pipeline 3 exceeded max restarts (5), stopped
+Pipeline 2 exceeded max restarts (5), stopped
+Pipeline 1 exceeded max restarts (5), stopped

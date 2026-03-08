@@ -1,8 +1,8 @@
 diff --git a/node_modules/ptpv2/ptp.js b/node_modules/ptpv2/ptp.js
-index f5dd89c..42ffff9 100644
+index f5dd89c..768ca2b 100644
 --- a/node_modules/ptpv2/ptp.js
 +++ b/node_modules/ptpv2/ptp.js
-@@ -12,6 +12,7 @@ var minSyncInterval = 10000; // in ms
+@@ -12,25 +12,61 @@ var minSyncInterval = 10000; // in ms
  var ptpClientEvent = dgram.createSocket({ type: 'udp4', reuseAddr: true });
  var ptpClientGeneral = dgram.createSocket({ type: 'udp4', reuseAddr: true });
  var ptpMulticastAddrs = ['224.0.1.129', '224.0.1.130', '224.0.1.131', '224.0.1.132'];
@@ -10,16 +10,109 @@ index f5dd89c..42ffff9 100644
  
  //vars
  var t1, ts1, t2, ts2;
-@@ -72,7 +73,7 @@ exports.init = function(interface, domain, callback){
+ var offset = [0, 0];
+ var sync_seq;
++var sync_ts1 = {};
+ var req_seq = 0;
+ var lastSync = 0;
++var syncByte0 = 0x00; // transport-specific nibble from master's Sync
++var currentUtcOffset = 37; // TAI-UTC offset, updated from Announce messages
++
++// Generate clock identity from MAC address (EUI-64 format)
++var os = require('os');
++var clockIdentity = Buffer.alloc(8);
++require('crypto').randomFillSync(clockIdentity); // fallback
++function updateClockIdentity(iface) {
++	var nets = os.networkInterfaces();
++	for (var name in nets) {
++		for (var i = 0; i < nets[name].length; i++) {
++			var net = nets[name][i];
++			if (net.family === 'IPv4' && net.address === iface && net.mac && net.mac !== '00:00:00:00:00:00') {
++				var mac = net.mac.split(':').map(function(h){ return parseInt(h, 16); });
++				// EUI-64: insert ff:fe in middle of MAC
++				clockIdentity[0] = mac[0];
++				clockIdentity[1] = mac[1];
++				clockIdentity[2] = mac[2];
++				clockIdentity[3] = 0xff;
++				clockIdentity[4] = 0xfe;
++				clockIdentity[5] = mac[3];
++				clockIdentity[6] = mac[4];
++				clockIdentity[7] = mac[5];
++				return;
++			}
++		}
++	}
++}
++var portNumber = 1;
+ 
+ //functions
+ //creates ptp delay_req buffer
+ var ptp_delay_req = function(){
+-	var length = 52;
++	var length = 44;
+ 	var buffer = Buffer.alloc(length);
+ 	req_seq = (req_seq + 1) % 0x10000;
+ 	
+-	buffer.writeUInt8(1, 0);
++	buffer.writeUInt8(syncByte0 | 0x01, 0); // match transportSpecific from master's Sync
+ 	buffer.writeUInt8(2, 1);
+ 	buffer.writeUInt16BE(length, 2);
++	buffer.writeUInt8(ptp_domain, 4);
++	clockIdentity.copy(buffer, 20);
++	buffer.writeUInt16BE(portNumber, 28);
+ 	buffer.writeUInt16BE(req_seq, 30);
++	buffer.writeUInt8(0x01, 32); // control field: delay_req
++	buffer.writeInt8(0x7F, 33); // logMessageInterval
+ 	
+ 	return buffer;
+ }
+@@ -61,18 +97,25 @@ exports.ptp_master = function(){
+ 	return ptpMaster;
+ }
+ 
++exports.utc_offset = function(){
++	return currentUtcOffset;
++}
++
+ exports.init = function(interface, domain, callback){
+ 	addr = interface ? interface : '127.0.0.1';
+ 	ptp_domain = domain ? domain : 0;
+ 	cb = callback ? callback : function(){};
+ 
++	updateClockIdentity(addr);
++
+ 	ptpClientEvent.bind(319);
+ 	ptpClientGeneral.bind(320);
+ }
  
  //event msg client
  ptpClientEvent.on('listening', function() {
 -	ptpClientEvent.addMembership(ptpMulticastAddrs[ptp_domain], addr);
 +	ptpClientEvent.addMembership(ptpMulticastAddr(), addr);
++	ptpClientEvent.setMulticastInterface(addr);
  });
  
  ptpClientEvent.on('message', function(buffer, remote) {
-@@ -121,7 +122,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -98,6 +141,9 @@ ptpClientEvent.on('message', function(buffer, remote) {
+ 	if(type != 0)//only process sync messages
+ 		return;
+ 
++	// Capture the transport-specific nibble from master's Sync
++	syncByte0 = buffer.readUInt8(0) & 0xf0;
++
+ 	//do we have a new ptp master?
+ 	if(source != ptpMaster){
+ 		ptpMaster = source;
+@@ -110,7 +156,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+ 	//check if master is two step or not
+ 	if((flags & 0x0200) == 0x0200){
+ 		//two step, wait for follow_up msg for accurate t1
+-		ts1 = recv_ts;
++		sync_ts1[sequence] = recv_ts;
+ 	}else if(Date.now() - lastSync > minSyncInterval){
+ 		//got accurate t1 (no follow_up msg)
+ 		ts1 = recv_ts;
+@@ -121,7 +167,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
  		t1 = [tsS, tsNS];
  
  		//send delay_req
@@ -28,7 +121,7 @@ index f5dd89c..42ffff9 100644
  			t2 = getCorrectedTime();
  		});
  
-@@ -131,7 +132,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -131,7 +177,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
  
  //general msg Client
  ptpClientGeneral.on('listening', function() {
@@ -37,7 +130,22 @@ index f5dd89c..42ffff9 100644
  });
  
  ptpClientGeneral.on('message', function(buffer, remote) {
-@@ -162,7 +163,7 @@ ptpClientGeneral.on('message', function(buffer, remote) {
+@@ -155,20 +201,33 @@ ptpClientGeneral.on('message', function(buffer, remote) {
+ 	if(version != 2 || domain != ptp_domain)
+ 		return;
+ 
+-	if(type == 0x08 && sync_seq == sequence && Date.now() - lastSync > minSyncInterval){ //follow up msg with current seq
++	if(type == 0x0b && buffer.length >= 54){ //announce msg
++		currentUtcOffset = buffer.readInt16BE(44);
++	}
++
++	if(type == 0x08 && sync_ts1[sequence] && Date.now() - lastSync > minSyncInterval){ //follow up msg with stored ts1
++		ts1 = sync_ts1[sequence];
++		delete sync_ts1[sequence];
++
+ 		//read t1 timestamp
+ 		var tsS = (buffer.readUInt16BE(34) << 4) + buffer.readUInt32BE(36);
+ 		var tsNS = buffer.readUInt32BE(40);
  		t1 = [tsS, tsNS];
  
  		//send delay_req
@@ -46,3 +154,16 @@ index f5dd89c..42ffff9 100644
  			t2 = getCorrectedTime();
  		});
  
+ 		t2 = getCorrectedTime();
+ 
+-	}else if(type == 0x09 && req_seq == sequence){ //delay_rsp msg
++	}else if(type == 0x09){ //delay_rsp msg
++		// Check requestingPortIdentity (bytes 44-53) matches our clockIdentity
++		var reqIdentity = buffer.slice(44, 52);
++		var reqPort = buffer.readUInt16BE(52);
++		if (!clockIdentity.equals(reqIdentity) || reqPort != portNumber)
++			return;
++
+ 		//read ts2 timestamp
+ 		var tsS = (buffer.readUInt16BE(34) << 4) + buffer.readUInt32BE(36);
+ 		var tsNS = buffer.readUInt32BE(40);

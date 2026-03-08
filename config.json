@@ -1,32 +1,23 @@
 [
     {
-        "IFACE": "10.151.203.96",
+        "IFACE": "10.151.5.226",
         "PORT": 5000,
-        "MCIFACE": "10.151.203.96",
-        "SOURCEMULTICAST": "239.254.151.10",
+        "MCIFACE": "10.151.5.226",
+        "SOURCEMULTICAST": "239.254.151.1",
         "MCPORT": 5004,
-        "STREAMSIZE": 16,
+        "STREAMSIZE": 2,
         "ENCODING": "L24",
         "SAMPLERATE": 48000,
-        "SOURCEIP": "",
+        "SOURCEIP": "10.151.5.225",
         "TIMEZONE": "Europe/Oslo",
         "DOMAIN": 84,
-        "DECODECHANNELS": 4,
+        "LEAPSECONDS": 1,
+        "NTPSERVER": "ntp.justervesenet.no",
+        "DECODECHANNELS": 1,
+        "SHOWFRAMES": false,
         "CHANNEL_INFO": [
             {
                 "name": "Program LTC"
-            },
-            {
-                "name": "Backup LTC"
-            },
-            {
-                "name": "Studio A"
-            },
-            {
-                "name": "Studio B"
-            },
-            {
-                "name": "OB Truck"
             }
         ]
     }

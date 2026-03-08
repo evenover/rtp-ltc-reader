@@ -9,9 +9,15 @@ body {
   background:black;
   color:white;
   font-family:monospace;
+  height:100vh;
+  overflow:hidden;
+}
+
+#grid {
   display:grid;
   gap:2vw;
   height:100vh;
+  place-items:center;
 }
 
 .clock {
@@ -27,11 +33,13 @@ body {
 }
 
 .timecode {
-  font-size:8vw;
+  font-size:17vw;
 }
 </style>
 </head>
-<body id="grid"></body>
+<body>
+
+<div id="grid"></div>
 
 <script>
 const ws = new WebSocket("ws://" + location.host + location.pathname);
@@ -65,8 +73,9 @@ ws.onmessage = (e) => {
 
   clocks.forEach(c => {
     const el = document.querySelector("#ch" + c.channel + " .timecode");
-    if (el) el.innerText = c.tc;
+    if (el) el.innerText = c.showframes ? c.tc : c.tc.replace(/:[^:]*$/, '');
   });
 };
 </script>
+</body>
 </html>
