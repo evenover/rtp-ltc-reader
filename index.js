@@ -46,6 +46,9 @@ let ntpTime = null;      // last NTP-derived Date
 let ntpLocalRef = null;   // process.hrtime() at last NTP sync
 let ntpSynced = false;
 let clockOffsetMs = config.CLOCKOFFSET || 0;  // internal clock offset from system time
+let streamActive = false;
+let lastRtpPacket = 0;
+let probeSocket = null;
 
 // Initialize PTP sync
 try {
@@ -103,6 +106,10 @@ if (NTPSERVER) {
 }
 
 function startPipeline(channelIndex) {
+  if (!streamActive) {
+    pipelineStatus[channelIndex] = 'waiting';
+    return;
+  }
   const depay = ENCODING === 'L16' ? 'rtpL16depay' : 'rtpL24depay';
   const bitFmt = ENCODING === 'L16' ? 'S16LE' : 'S16LE';
 
@@ -156,6 +163,10 @@ function startPipeline(channelIndex) {
 
   gst.on('exit', () => {
     gstProcesses[channelIndex] = null;
+    if (!streamActive) {
+      pipelineStatus[channelIndex] = 'waiting';
+      return;
+    }
     pipelineStatus[channelIndex] = 'stopped';
     restartCount[channelIndex]++;
     if (restartCount[channelIndex] <= MAX_RESTARTS) {
@@ -168,10 +179,78 @@ function startPipeline(channelIndex) {
   });
 }
 
-// Start alle pipelines
-for (let i = 0; i < DECODECHANNELS; i++) {
-  startPipeline(i);
+function stopAllPipelines() {
+  for (let i = 0; i < DECODECHANNELS; i++) {
+    if (gstProcesses[i]) {
+      gstProcesses[i].kill();
+      gstProcesses[i] = null;
+    }
+    pipelineStatus[i] = 'waiting';
+    restartCount[i] = 0;
+  }
 }
+
+function startAllPipelines() {
+  for (let i = 0; i < DECODECHANNELS; i++) {
+    if (!gstProcesses[i]) {
+      startPipeline(i);
+    }
+  }
+}
+
+// RTP stream probe — listens for packets on the multicast group
+function startStreamProbe() {
+  if (probeSocket) return;
+  const STREAM_TIMEOUT = 5000; // ms without packets → stream gone
+
+  const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  probeSocket = sock;
+
+  sock.on('message', () => {
+    lastRtpPacket = Date.now();
+    if (!streamActive) {
+      streamActive = true;
+      console.log('RTP stream detected — starting decode pipelines');
+      startAllPipelines();
+    }
+  });
+
+  sock.on('error', (err) => {
+    console.error(`Stream probe error: ${err.message}`);
+    try { sock.close(); } catch(e) {}
+    probeSocket = null;
+    setTimeout(startStreamProbe, 5000);
+  });
+
+  sock.bind(MCPORT, () => {
+    try {
+      if (SOURCEIP) {
+        sock.addMembership(SOURCEMULTICAST, MCIFACE);
+      } else {
+        sock.addMembership(SOURCEMULTICAST, MCIFACE);
+      }
+      console.log(`Stream probe listening on ${SOURCEMULTICAST}:${MCPORT}`);
+    } catch (e) {
+      console.error(`Stream probe join failed: ${e.message}`);
+    }
+  });
+
+  // Periodic check: if no packets for STREAM_TIMEOUT, stream is gone
+  const monitor = setInterval(() => {
+    if (!probeSocket) { clearInterval(monitor); return; }
+    if (streamActive && lastRtpPacket > 0 && (Date.now() - lastRtpPacket) > STREAM_TIMEOUT) {
+      streamActive = false;
+      console.log('RTP stream lost — stopping decode pipelines');
+      stopAllPipelines();
+    }
+  }, 1000);
+}
+
+// Set initial state and start probe
+for (let i = 0; i < DECODECHANNELS; i++) {
+  pipelineStatus[i] = 'waiting';
+}
+startStreamProbe();
 
 // Combo route: /ptp+ntp, /ptp+channel-1, /ntp+channel-1+channel-2, etc.
 const comboPattern = /^\/(?:(?:ptp|ntp|clock|channel-\d+)\+)+(?:ptp|ntp|clock|channel-\d+)$/;
@@ -302,6 +381,7 @@ app.get('/api/status', (req, res) => {
     });
   }
   res.json({
+    stream: streamActive,
     ptp: {
       synced: ptpv2.is_synced(),
       master: ptpv2.is_synced() ? ptpv2.ptp_master() : null
@@ -333,6 +413,7 @@ wss.on('connection', (ws, req) => {
         });
       }
       ws.send(JSON.stringify({
+        stream: streamActive,
         ptp: {
           synced: ptpv2.is_synced(),
           master: ptpv2.is_synced() ? ptpv2.ptp_master() : null

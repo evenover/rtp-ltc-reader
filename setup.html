@@ -312,6 +312,10 @@ details.sdp-details button:hover {
     <div class="panel">
       <h2>Status</h2>
       <div class="status-row">
+        <span>RTP Stream</span>
+        <span id="stream-status"><span class="dot grey"></span>Checking...</span>
+      </div>
+      <div class="status-row">
         <a href="/ptp" target="_blank">PTP</a>
         <span id="ptp-status"><span class="dot grey"></span>Connecting...</span>
       </div>
@@ -668,6 +672,13 @@ function connectStatus() {
   ws.onmessage = (e) => {
     const status = JSON.parse(e.data);
 
+    const streamEl = document.getElementById('stream-status');
+    if (status.stream) {
+      streamEl.innerHTML = '<span class="dot green"></span>Active';
+    } else {
+      streamEl.innerHTML = '<span class="dot red"></span>No stream';
+    }
+
     const ptpEl = document.getElementById('ptp-status');
     if (status.ptp.synced) {
       ptpEl.innerHTML = `<span class="dot green"></span>Synced — Master: ${status.ptp.master}`;
@@ -700,6 +711,9 @@ function connectStatus() {
       } else if (ch.pipeline === 'starting') {
         dotClass = 'yellow';
         label = 'Starting...';
+      } else if (ch.pipeline === 'waiting') {
+        dotClass = 'grey';
+        label = 'Waiting for stream';
       } else if (ch.pipeline === 'error') {
         dotClass = 'red';
         label = 'Error';
