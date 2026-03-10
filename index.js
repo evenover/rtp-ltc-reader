@@ -1,5 +1,4 @@
 const express = require('express');
-const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
@@ -38,7 +37,6 @@ let latestTC = Array(DECODECHANNELS).fill("--:--:--:--");
 let pipelineStatus = Array(DECODECHANNELS).fill('stopped');
 let lastTCUpdate = Array(DECODECHANNELS).fill(0);
 let restartCount = Array(DECODECHANNELS).fill(0);
-let gstProcesses = Array(DECODECHANNELS).fill(null);
 const MAX_RESTARTS = 5;
 let ptpSynced = false;
 let ptpMasterID = null;
@@ -49,6 +47,189 @@ let clockOffsetMs = config.CLOCKOFFSET || 0;  // internal clock offset from syst
 let streamActive = false;
 let lastRtpPacket = 0;
 let probeSocket = null;
+
+// ========== LTC Decoder (pure Node.js, no GStreamer) ==========
+
+function bitsToInt(bits, offset, count) {
+  let val = 0;
+  for (let i = 0; i < count; i++) {
+    val |= (bits[offset + i] << i); // LSB first in LTC
+  }
+  return val;
+}
+
+class LTCDecoder {
+  constructor(sampleRate) {
+    this.sampleRate = sampleRate;
+    this.prevSign = 0;
+    this.sampleCount = 0;
+    this.waitingForSecondHalf = false;
+    this.bits = [];
+    this.calibrating = true;
+    this.intervals = [];
+    this.threshold = 0;
+  }
+
+  reset() {
+    this.prevSign = 0;
+    this.sampleCount = 0;
+    this.waitingForSecondHalf = false;
+    this.bits = [];
+    this.calibrating = true;
+    this.intervals = [];
+    this.threshold = 0;
+  }
+
+  decode(samples) {
+    const results = [];
+    for (let i = 0; i < samples.length; i++) {
+      const sign = samples[i] >= 0 ? 1 : -1;
+      this.sampleCount++;
+
+      if (sign !== this.prevSign && this.prevSign !== 0) {
+        const interval = this.sampleCount;
+        this.sampleCount = 0;
+
+        if (this.calibrating) {
+          if (interval > 2) this.intervals.push(interval);
+          if (this.intervals.length >= 400) this.calibrate();
+        } else {
+          this.processTransition(interval, results);
+        }
+      }
+      this.prevSign = sign;
+    }
+    return results;
+  }
+
+  calibrate() {
+    const sorted = [...this.intervals].sort((a, b) => a - b);
+    const trim = Math.floor(sorted.length * 0.1);
+    const trimmed = sorted.slice(trim, sorted.length - trim);
+    if (trimmed.length < 20) { this.intervals = []; return; }
+
+    const median = trimmed[Math.floor(trimmed.length / 2)];
+    const shorts = trimmed.filter(v => v < median);
+    const longs = trimmed.filter(v => v >= median);
+
+    if (shorts.length > 5 && longs.length > 5) {
+      const avgShort = shorts.reduce((a, b) => a + b, 0) / shorts.length;
+      const avgLong = longs.reduce((a, b) => a + b, 0) / longs.length;
+      this.threshold = (avgShort + avgLong) / 2;
+      this.calibrating = false;
+      console.log(`LTC calibrated: short≈${avgShort.toFixed(1)} long≈${avgLong.toFixed(1)} threshold=${this.threshold.toFixed(1)} samples`);
+    }
+    this.intervals = [];
+  }
+
+  processTransition(interval, results) {
+    if (interval < 2) return; // noise
+
+    if (interval < this.threshold) {
+      // Short interval — half of a "1" bit
+      if (this.waitingForSecondHalf) {
+        this.bits.push(1);
+        this.waitingForSecondHalf = false;
+        this.checkFrame(results);
+      } else {
+        this.waitingForSecondHalf = true;
+      }
+    } else {
+      // Long interval — full "0" bit
+      this.waitingForSecondHalf = false;
+      this.bits.push(0);
+      this.checkFrame(results);
+    }
+
+    if (this.bits.length > 200) {
+      this.bits = this.bits.slice(-80);
+    }
+  }
+
+  checkFrame(results) {
+    if (this.bits.length < 80) return;
+
+    // LTC sync word (bits 64-79): 0011111111111101
+    const SYNC = [0,0,1,1,1,1,1,1,1,1,1,1,1,1,0,1];
+    const last80 = this.bits.slice(-80);
+    const tail = last80.slice(64);
+
+    for (let i = 0; i < 16; i++) {
+      if (tail[i] !== SYNC[i]) return;
+    }
+
+    const tc = this.extractTimecode(last80);
+    if (tc) results.push(tc);
+    this.bits = [];
+  }
+
+  extractTimecode(bits) {
+    const frameUnits = bitsToInt(bits, 0, 4);
+    const frameTens  = bitsToInt(bits, 8, 2);
+    const secsUnits  = bitsToInt(bits, 16, 4);
+    const secsTens   = bitsToInt(bits, 24, 3);
+    const minsUnits  = bitsToInt(bits, 32, 4);
+    const minsTens   = bitsToInt(bits, 40, 3);
+    const hrsUnits   = bitsToInt(bits, 48, 4);
+    const hrsTens    = bitsToInt(bits, 56, 2);
+
+    const frames  = frameTens * 10 + frameUnits;
+    const seconds = secsTens * 10 + secsUnits;
+    const minutes = minsTens * 10 + minsUnits;
+    const hours   = hrsTens * 10 + hrsUnits;
+
+    if (hours > 23 || minutes > 59 || seconds > 59 || frames > 30) return null;
+
+    const p = n => String(n).padStart(2, '0');
+    return `${p(hours)}:${p(minutes)}:${p(seconds)}:${p(frames)}`;
+  }
+}
+
+// Extract per-channel audio from an RTP packet
+function extractAudioFromRTP(buf, streamSize) {
+  if (buf.length < 12) return null;
+  const cc = buf[0] & 0x0f;
+  const hasExtension = (buf[0] >> 4) & 0x01;
+  let offset = 12 + cc * 4;
+  if (hasExtension && buf.length >= offset + 4) {
+    const extLen = buf.readUInt16BE(offset + 2);
+    offset += 4 + extLen * 4;
+  }
+
+  const bytesPerSample = ENCODING === 'L16' ? 2 : 3;
+  const bytesPerFrame = bytesPerSample * streamSize;
+  const payloadLen = buf.length - offset;
+  const numFrames = Math.floor(payloadLen / bytesPerFrame);
+  if (numFrames === 0) return null;
+
+  const channels = [];
+  for (let ch = 0; ch < streamSize; ch++) {
+    channels.push(new Float64Array(numFrames));
+  }
+
+  for (let f = 0; f < numFrames; f++) {
+    for (let ch = 0; ch < streamSize; ch++) {
+      const off = offset + f * bytesPerFrame + ch * bytesPerSample;
+      let sample;
+      if (bytesPerSample === 3) {
+        sample = (buf[off] << 16) | (buf[off + 1] << 8) | buf[off + 2];
+        if (sample & 0x800000) sample -= 0x1000000;
+        channels[ch][f] = sample / 8388608.0;
+      } else {
+        sample = (buf[off] << 8) | buf[off + 1];
+        if (sample & 0x8000) sample -= 0x10000;
+        channels[ch][f] = sample / 32768.0;
+      }
+    }
+  }
+  return channels;
+}
+
+// Create LTC decoders for each channel
+const ltcDecoders = [];
+for (let i = 0; i < DECODECHANNELS; i++) {
+  ltcDecoders.push(new LTCDecoder(SAMPLERATE));
+}
 
 // Initialize PTP sync
 try {
@@ -106,95 +287,21 @@ if (NTPSERVER) {
 }
 
 function startPipeline(channelIndex) {
-  if (!streamActive) {
-    pipelineStatus[channelIndex] = 'waiting';
-    return;
-  }
-  const depay = ENCODING === 'L16' ? 'rtpL16depay' : 'rtpL24depay';
-  const bitFmt = ENCODING === 'L16' ? 'S16LE' : 'S16LE';
-
-  const args = [
-    'udpsrc',
-    `address=${SOURCEMULTICAST}`,
-    `port=${MCPORT}`,
-    `multicast-iface=${MCIFACE}`,
-    'auto-multicast=true',
-    `caps=application/x-rtp,media=audio,clock-rate=${SAMPLERATE},encoding-name=${ENCODING},channels=${STREAMSIZE}`,
-    '!',
-    depay,
-    '!',
-    'audioconvert',
-    '!',
-    `audio/x-raw,format=${bitFmt},channels=${STREAMSIZE}`,
-    '!',
-    'deinterleave',
-    'name=d',
-    `d.src_${channelIndex}`,
-    '!',
-    'queue',
-    '!',
-    'ltcdec',
-    '!',
-    'fakesink'
-  ];
-
-  const gst = spawn('gst-launch-1.0', args);
-  gstProcesses[channelIndex] = gst;
-
-  pipelineStatus[channelIndex] = 'starting';
-
-  gst.on('error', (err) => {
-    console.error(`Pipeline ${channelIndex+1}: ${err.message}`);
-    pipelineStatus[channelIndex] = 'error';
-  });
-
-  gst.stderr.on('data', data => {
-    const text = data.toString();
-    const match = text.match(/(\d\d:\d\d:\d\d:\d\d)/);
-    if (match) {
-      latestTC[channelIndex] = match[1];
-      lastTCUpdate[channelIndex] = Date.now();
-      pipelineStatus[channelIndex] = 'decoding';
-      restartCount[channelIndex] = 0;
-    } else if (pipelineStatus[channelIndex] === 'starting') {
-      pipelineStatus[channelIndex] = 'running';
-    }
-  });
-
-  gst.on('exit', () => {
-    gstProcesses[channelIndex] = null;
-    if (!streamActive) {
-      pipelineStatus[channelIndex] = 'waiting';
-      return;
-    }
-    pipelineStatus[channelIndex] = 'stopped';
-    restartCount[channelIndex]++;
-    if (restartCount[channelIndex] <= MAX_RESTARTS) {
-      console.log(`Pipeline ${channelIndex+1} restarting (${restartCount[channelIndex]}/${MAX_RESTARTS})`);
-      setTimeout(() => startPipeline(channelIndex), 1000);
-    } else {
-      console.log(`Pipeline ${channelIndex+1} exceeded max restarts (${MAX_RESTARTS}), stopped`);
-      pipelineStatus[channelIndex] = 'failed';
-    }
-  });
+  // LTC decoding now happens inline in the stream probe — this is a no-op
+  pipelineStatus[channelIndex] = 'decoding';
 }
 
 function stopAllPipelines() {
   for (let i = 0; i < DECODECHANNELS; i++) {
-    if (gstProcesses[i]) {
-      gstProcesses[i].kill();
-      gstProcesses[i] = null;
-    }
     pipelineStatus[i] = 'waiting';
     restartCount[i] = 0;
+    ltcDecoders[i].reset();
   }
 }
 
 function startAllPipelines() {
   for (let i = 0; i < DECODECHANNELS; i++) {
-    if (!gstProcesses[i]) {
-      startPipeline(i);
-    }
+    pipelineStatus[i] = 'decoding';
   }
 }
 
@@ -206,12 +313,28 @@ function startStreamProbe() {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
   probeSocket = sock;
 
-  sock.on('message', () => {
+  sock.on('message', (buf) => {
     lastRtpPacket = Date.now();
     if (!streamActive) {
       streamActive = true;
-      console.log('RTP stream detected — starting decode pipelines');
+      console.log('RTP stream detected — decoding LTC');
       startAllPipelines();
+    }
+
+    // Decode LTC from RTP audio
+    try {
+      const channels = extractAudioFromRTP(buf, STREAMSIZE);
+      if (!channels) return;
+      for (let ch = 0; ch < DECODECHANNELS && ch < channels.length; ch++) {
+        const timecodes = ltcDecoders[ch].decode(channels[ch]);
+        if (timecodes.length > 0) {
+          latestTC[ch] = timecodes[timecodes.length - 1];
+          lastTCUpdate[ch] = Date.now();
+          pipelineStatus[ch] = 'decoding';
+        }
+      }
+    } catch (e) {
+      // Malformed packet — ignore
     }
   });
 
@@ -224,10 +347,10 @@ function startStreamProbe() {
 
   sock.bind(MCPORT, () => {
     try {
-      if (SOURCEIP) {
+      if (MCIFACE) {
         sock.addMembership(SOURCEMULTICAST, MCIFACE);
       } else {
-        sock.addMembership(SOURCEMULTICAST, MCIFACE);
+        sock.addMembership(SOURCEMULTICAST);
       }
       console.log(`Stream probe listening on ${SOURCEMULTICAST}:${MCPORT}`);
     } catch (e) {
@@ -331,27 +454,19 @@ app.post('/api/restart/:channel', (req, res) => {
   if (isNaN(ch) || ch < 0 || ch >= DECODECHANNELS) {
     return res.status(400).json({ ok: false, message: 'Invalid channel' });
   }
-  if (gstProcesses[ch]) {
-    gstProcesses[ch].kill();
-  }
+  ltcDecoders[ch].reset();
   restartCount[ch] = 0;
-  pipelineStatus[ch] = 'stopped';
-  setTimeout(() => startPipeline(ch), 500);
-  res.json({ ok: true, message: `Channel ${ch + 1} restarting` });
+  pipelineStatus[ch] = streamActive ? 'decoding' : 'waiting';
+  res.json({ ok: true, message: `Channel ${ch + 1} decoder reset` });
 });
 
 app.post('/api/restart', (req, res) => {
   for (let i = 0; i < DECODECHANNELS; i++) {
-    if (gstProcesses[i]) {
-      gstProcesses[i].kill();
-    }
+    ltcDecoders[i].reset();
     restartCount[i] = 0;
-    pipelineStatus[i] = 'stopped';
+    pipelineStatus[i] = streamActive ? 'decoding' : 'waiting';
   }
-  setTimeout(() => {
-    for (let i = 0; i < DECODECHANNELS; i++) startPipeline(i);
-  }, 500);
-  res.json({ ok: true, message: 'All channels restarting' });
+  res.json({ ok: true, message: 'All decoders reset' });
 });
 
 app.post('/api/config', (req, res) => {

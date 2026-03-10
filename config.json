@@ -8,13 +8,13 @@
         "STREAMSIZE": 2,
         "ENCODING": "L24",
         "SAMPLERATE": 48000,
-        "SOURCEIP": "10.151.5.225",
+        "SOURCEIP": "10.151.5.220",
         "TIMEZONE": "Europe/Oslo",
         "DOMAIN": 84,
         "LEAPSECONDS": 1,
         "NTPSERVER": "ntp.justervesenet.no",
         "DECODECHANNELS": 1,
-        "SHOWFRAMES": false,
+        "SHOWFRAMES": true,
         "CHANNEL_INFO": [
             {
                 "name": "Program LTC"
