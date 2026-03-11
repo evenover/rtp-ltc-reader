@@ -301,6 +301,89 @@ details.sdp-details button:hover {
   gap: 1rem;
   margin-top: 0.75rem;
 }
+
+.output-card {
+  border: 1px solid #444;
+  padding: 0.5rem;
+  margin-top: 0.4rem;
+  background: #2a2a2a;
+}
+
+.output-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.output-header input {
+  flex: 1;
+}
+
+.output-segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.seg-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: #444;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  border-radius: 3px;
+}
+
+.seg-tag button {
+  background: none;
+  border: none;
+  color: #f66;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.seg-add {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.seg-add select {
+  flex: 1;
+}
+
+.seg-add button {
+  background: #555;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.output-link {
+  font-size: 0.75rem;
+  margin-top: 0.3rem;
+}
+
+.output-link a {
+  color: #4af;
+  text-decoration: none;
+}
+
+.output-link a:hover {
+  text-decoration: underline;
+}
+
+.output-msg {
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.output-msg.ok { color: #0f0; }
+.output-msg.err { color: #f00; }
 </style>
 </head>
 <body>
@@ -431,6 +514,13 @@ details.sdp-details button:hover {
       </details>
     </div>
   </div>
+
+  <fieldset style="margin-top:0.75rem">
+    <legend>Outputs</legend>
+    <div id="output-list"></div>
+    <button class="add-btn" onclick="addOutput()">+ Add Output</button>
+    <div id="output-msg" class="output-msg"></div>
+  </fieldset>
 
   <div class="bottom-bar">
     <button onclick="save()">Save</button>
@@ -615,7 +705,8 @@ async function save() {
     NTPSERVER: document.getElementById('ntpserver').value,
     DECODECHANNELS: parseInt(document.getElementById('channels').value),
     SHOWFRAMES: document.getElementById('showframes').checked,
-    CHANNEL_INFO: channelInfo
+    CHANNEL_INFO: channelInfo,
+    OUTPUTS: outputsData
   };
 
   const res = await fetch('/api/config', {
@@ -781,7 +872,150 @@ function pollClock() {
   }, 500);
 }
 
+// ========== Outputs ==========
+let outputsData = [];
+
+function getAvailableSegments() {
+  const segs = ['ptp', 'ntp', 'clock'];
+  const n = parseInt(document.getElementById('channels').value) || 1;
+  for (let i = 1; i <= n; i++) segs.push('channel-' + i);
+  return segs;
+}
+
+function segLabel(seg) {
+  if (seg === 'ptp') return 'PTP';
+  if (seg === 'ntp') return 'NTP';
+  if (seg === 'clock') return 'Clock';
+  const ch = parseInt(seg.replace('channel-', '')) - 1;
+  const list = document.querySelectorAll('#channel-list input');
+  return list[ch] ? list[ch].value : seg;
+}
+
+function renderOutputs() {
+  const list = document.getElementById('output-list');
+  list.innerHTML = '';
+  const allSegs = getAvailableSegments();
+
+  outputsData.forEach((out, idx) => {
+    const card = document.createElement('div');
+    card.className = 'output-card';
+
+    const header = document.createElement('div');
+    header.className = 'output-header';
+    header.innerHTML = `<span style="opacity:0.5;font-size:0.75rem">${idx + 1}</span>` +
+      `<input type="text" value="${out.name || 'Output ' + (idx + 1)}" data-output-name="${idx}">` +
+      `<button class="remove-btn" onclick="removeOutput(${idx})">✕</button>`;
+    card.appendChild(header);
+
+    const tags = document.createElement('div');
+    tags.className = 'output-segments';
+    (out.segments || []).forEach((seg, si) => {
+      const tag = document.createElement('span');
+      tag.className = 'seg-tag';
+      tag.innerHTML = `${segLabel(seg)} <button onclick="removeSegment(${idx},${si})">✕</button>`;
+      tags.appendChild(tag);
+    });
+    card.appendChild(tags);
+
+    const addRow = document.createElement('div');
+    addRow.className = 'seg-add';
+    const sel = document.createElement('select');
+    sel.dataset.outputIdx = idx;
+    const existing = out.segments || [];
+    const available = allSegs.filter(s => !existing.includes(s));
+    available.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = segLabel(s);
+      sel.appendChild(opt);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add';
+    addBtn.onclick = () => {
+      outputsData[idx].segments = outputsData[idx].segments || [];
+      if (outputsData[idx].segments.includes(sel.value)) return;
+      outputsData[idx].segments.push(sel.value);
+      renderOutputs();
+      saveOutputs();
+    };
+    addRow.appendChild(sel);
+    addRow.appendChild(addBtn);
+    if (available.length > 0) card.appendChild(addRow);
+
+    const link = document.createElement('div');
+    link.className = 'output-link';
+    link.innerHTML = `<a href="/output-${idx + 1}" target="_blank">Open /output-${idx + 1}</a>`;
+    card.appendChild(link);
+
+    list.appendChild(card);
+  });
+}
+
+function addOutput() {
+  outputsData.push({ name: 'Output ' + (outputsData.length + 1), segments: [] });
+  renderOutputs();
+  saveOutputs();
+}
+
+function removeOutput(idx) {
+  outputsData.splice(idx, 1);
+  renderOutputs();
+  saveOutputs();
+}
+
+function removeSegment(outIdx, segIdx) {
+  outputsData[outIdx].segments.splice(segIdx, 1);
+  renderOutputs();
+  saveOutputs();
+}
+
+async function saveOutputs() {
+  // Collect names from inputs
+  document.querySelectorAll('[data-output-name]').forEach(input => {
+    const idx = parseInt(input.dataset.outputName);
+    if (outputsData[idx]) outputsData[idx].name = input.value;
+  });
+  const msg = document.getElementById('output-msg');
+  try {
+    const res = await fetch('/api/outputs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(outputsData)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msg.className = 'output-msg ok';
+      msg.textContent = 'Saved';
+      setTimeout(() => { msg.textContent = ''; }, 2000);
+    }
+  } catch(e) {
+    msg.className = 'output-msg err';
+    msg.textContent = 'Save failed';
+  }
+}
+
+// Debounced save on name change
+document.getElementById('output-list').addEventListener('input', (e) => {
+  if (e.target.dataset.outputName !== undefined) {
+    const idx = parseInt(e.target.dataset.outputName);
+    if (outputsData[idx]) outputsData[idx].name = e.target.value;
+    clearTimeout(e.target._saveTimer);
+    e.target._saveTimer = setTimeout(saveOutputs, 500);
+  }
+});
+
+async function loadOutputs() {
+  try {
+    const res = await fetch('/api/outputs');
+    outputsData = await res.json();
+  } catch(e) {
+    outputsData = [];
+  }
+  renderOutputs();
+}
+
 load();
+loadOutputs();
 connectStatus();
 pollClock();
 </script>

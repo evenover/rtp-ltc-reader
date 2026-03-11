@@ -61,68 +61,81 @@ html, body {
 
 <script>
 const wsPath = location.pathname.replace(/%2B/gi, '+').replace(/ /g, '+');
-const ws = new WebSocket("ws://" + location.host + wsPath);
 const grid = document.getElementById("grid");
+let currentIds = '';
 
-ws.onmessage = (e) => {
-  const clocks = JSON.parse(e.data);
-
-  if (grid.children.length === 0) {
-    const n = clocks.length;
-    if (n <= 2) {
-      grid.style.gridTemplateColumns = '1fr';
-      grid.style.gridTemplateRows = Array(n).fill('1fr').join(' ');
-    } else {
-      const cols = Math.ceil(n / 2);
-      grid.style.gridTemplateColumns = Array(cols).fill('1fr').join(' ');
-      grid.style.gridTemplateRows = '1fr 1fr';
-    }
-    if (n > 2) {
-      grid.querySelectorAll('.time').length === 0 && (grid.dataset.small = '1');
-    }
-    clocks.forEach(c => {
-      const wrapper = document.createElement("div");
-      wrapper.className = "clock";
-      wrapper.dataset.id = c.id;
-
-      const label = document.createElement("div");
-      label.className = "label";
-      if (n > 4) label.style.fontSize = '0.8vw';
-      else if (n > 2) label.style.fontSize = '1vw';
-
-      const ball = document.createElement("span");
-      ball.className = "sync-ball" + (c.synced === null ? " hidden" : (c.synced ? " synced" : ""));
-
-      const text = document.createElement("span");
-      text.innerText = c.label;
-
-      label.appendChild(ball);
-      label.appendChild(text);
-
-      const time = document.createElement("div");
-      time.className = "time";
-      if (n > 4) time.style.fontSize = '5vw';
-      else if (n > 2) time.style.fontSize = '8vw';
-      time.innerText = c.time;
-
-      wrapper.appendChild(label);
-      wrapper.appendChild(time);
-      grid.appendChild(wrapper);
-    });
+function buildGrid(clocks) {
+  grid.innerHTML = '';
+  const n = clocks.length;
+  if (n <= 2) {
+    grid.style.gridTemplateColumns = '1fr';
+    grid.style.gridTemplateRows = Array(n).fill('1fr').join(' ');
+  } else {
+    const cols = Math.ceil(n / 2);
+    grid.style.gridTemplateColumns = Array(cols).fill('1fr').join(' ');
+    grid.style.gridTemplateRows = '1fr 1fr';
   }
-
   clocks.forEach(c => {
-    const el = grid.querySelector('[data-id="' + c.id + '"]');
-    if (!el) return;
-    el.querySelector(".time").innerText = c.time;
-    const ball = el.querySelector(".sync-ball");
-    if (c.synced === null) {
-      ball.className = "sync-ball hidden";
-    } else {
-      ball.className = c.synced ? "sync-ball synced" : "sync-ball";
-    }
+    const wrapper = document.createElement("div");
+    wrapper.className = "clock";
+    wrapper.dataset.id = c.id;
+
+    const label = document.createElement("div");
+    label.className = "label";
+    if (n > 4) label.style.fontSize = '0.8vw';
+    else if (n > 2) label.style.fontSize = '1vw';
+
+    const ball = document.createElement("span");
+    ball.className = "sync-ball" + (c.synced === null ? " hidden" : (c.synced ? " synced" : ""));
+
+    const text = document.createElement("span");
+    text.innerText = c.label;
+
+    label.appendChild(ball);
+    label.appendChild(text);
+
+    const time = document.createElement("div");
+    time.className = "time";
+    if (n > 4) time.style.fontSize = '5vw';
+    else if (n > 2) time.style.fontSize = '8vw';
+    time.innerText = c.time;
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(time);
+    grid.appendChild(wrapper);
   });
-};
+}
+
+function connect() {
+  const ws = new WebSocket("ws://" + location.host + wsPath);
+
+  ws.onmessage = (e) => {
+    const clocks = JSON.parse(e.data);
+    const ids = clocks.map(c => c.id).join(',');
+
+    if (ids !== currentIds) {
+      buildGrid(clocks);
+      currentIds = ids;
+      return;
+    }
+
+    clocks.forEach(c => {
+      const el = grid.querySelector('[data-id="' + c.id + '"]');
+      if (!el) return;
+      el.querySelector(".time").innerText = c.time;
+      const ball = el.querySelector(".sync-ball");
+      if (c.synced === null) {
+        ball.className = "sync-ball hidden";
+      } else {
+        ball.className = c.synced ? "sync-ball synced" : "sync-ball";
+      }
+    });
+  };
+
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+
+connect();
 </script>
 </body>
 </html>

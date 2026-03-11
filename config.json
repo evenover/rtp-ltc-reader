@@ -14,11 +14,12 @@
         "LEAPSECONDS": 1,
         "NTPSERVER": "ntp.justervesenet.no",
         "DECODECHANNELS": 1,
-        "SHOWFRAMES": true,
+        "SHOWFRAMES": false,
         "CHANNEL_INFO": [
             {
                 "name": "Program LTC"
             }
-        ]
+        ],
+        "OUTPUTS": []
     }
 ]

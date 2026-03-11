@@ -25,6 +25,9 @@ const CHANNEL_INFO = config.CHANNEL_INFO;
 
 const dgram = require('dgram');
 
+// In-memory outputs config (persisted in config.json)
+let outputs = config.OUTPUTS || [];
+
 const app = express();
 app.use(express.json());
 const server = app.listen(PORT, () =>
@@ -387,6 +390,11 @@ app.get('/channel-:ids', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+app.get('/output-:id', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'combo.html'));
+});
+
 app.get('/ptp', (req, res) => {
   res.sendFile(path.join(__dirname, 'ptp.html'));
 });
@@ -467,6 +475,29 @@ app.post('/api/restart', (req, res) => {
     pipelineStatus[i] = streamActive ? 'decoding' : 'waiting';
   }
   res.json({ ok: true, message: 'All decoders reset' });
+});
+
+app.get('/api/outputs', (req, res) => {
+  res.json(outputs);
+});
+
+app.post('/api/outputs', (req, res) => {
+  const newOutputs = req.body;
+  if (!Array.isArray(newOutputs)) {
+    return res.status(400).json({ ok: false, message: 'Expected array' });
+  }
+  outputs = newOutputs;
+
+  // Persist to config.json
+  const raw = fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8');
+  const cfg = JSON.parse(raw);
+  cfg[0].OUTPUTS = outputs;
+  fs.writeFileSync(
+    path.join(__dirname, 'config.json'),
+    JSON.stringify(cfg, null, 4),
+    'utf8'
+  );
+  res.json({ ok: true });
 });
 
 app.post('/api/config', (req, res) => {
@@ -632,6 +663,70 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
+  // Helper: build clock data for a segment
+  function buildClockData(seg) {
+    if (seg === 'ptp') {
+      let synced = false;
+      let formatted = '--:--:--:--';
+      try {
+        synced = ptpv2.is_synced();
+        const time = synced ? ptpv2.ptp_time() : null;
+        if (time) {
+          const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;
+          const d = new Date((time[0] - utcOffset) * 1000 + Math.floor(time[1] / 1e6));
+          const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: TIMEZONE,
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+          }).formatToParts(d);
+          const hh = parts.find(p => p.type === 'hour').value;
+          const mm = parts.find(p => p.type === 'minute').value;
+          const ss = parts.find(p => p.type === 'second').value;
+          const fr = String(Math.floor(time[1] / (1e9 / 25))).padStart(2, '0');
+          formatted = SHOWFRAMES ? `${hh}:${mm}:${ss}:${fr}` : `${hh}:${mm}:${ss}`;
+        }
+      } catch(e) {}
+      return { id: 'ptp', label: 'PTP', time: formatted, synced };
+    } else if (seg === 'ntp') {
+      let formatted = '--:--:--';
+      if (ntpTime) {
+        const elapsed = process.hrtime(ntpLocalRef);
+        const now = new Date(ntpTime.getTime() + elapsed[0] * 1000 + Math.floor(elapsed[1] / 1e6));
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: TIMEZONE,
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false
+        }).formatToParts(now);
+        const hh = parts.find(p => p.type === 'hour').value;
+        const mm = parts.find(p => p.type === 'minute').value;
+        const ss = parts.find(p => p.type === 'second').value;
+        const ms = String(now.getMilliseconds()).padStart(3, '0');
+        formatted = SHOWFRAMES ? `${hh}:${mm}:${ss}.${ms}` : `${hh}:${mm}:${ss}`;
+      }
+      return { id: 'ntp', label: 'NTP', time: formatted, synced: ntpSynced };
+    } else if (seg === 'clock') {
+      const now = new Date(Date.now() + clockOffsetMs);
+      const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: TIMEZONE,
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false
+      }).formatToParts(now);
+      const hh = parts.find(p => p.type === 'hour').value;
+      const mm = parts.find(p => p.type === 'minute').value;
+      const ss = parts.find(p => p.type === 'second').value;
+      const ms = String(now.getMilliseconds()).padStart(3, '0');
+      const formatted = SHOWFRAMES ? `${hh}:${mm}:${ss}.${ms}` : `${hh}:${mm}:${ss}`;
+      return { id: 'clock', label: 'Clock', time: formatted, synced: true };
+    } else {
+      const chNum = parseInt(seg.replace('channel-', '')) - 1;
+      const name = CHANNEL_INFO[chNum] ? CHANNEL_INFO[chNum].name : `Channel ${chNum + 1}`;
+      const active = lastTCUpdate[chNum] > 0 && (Date.now() - lastTCUpdate[chNum]) < 5000;
+      let tc = latestTC[chNum] || '--:--:--:--';
+      if (!SHOWFRAMES) tc = tc.replace(/:[^:]*$/, '');
+      return { id: seg, label: name, time: tc, synced: active };
+    }
+  }
+
   // Combo clock endpoint: URLs like /ptp+ntp, /ptp+channel-1, etc.
   const urlPath = decodeURIComponent(req.url).replace(/\s/g, '+').slice(1);
   const segments = urlPath.split('+');
@@ -640,71 +735,30 @@ wss.on('connection', (ws, req) => {
     console.log(`Combo WS connected: ${segments.join('+')}`);
     const interval = setInterval(() => {
       try {
-        const clocks = segments.map(seg => {
-          if (seg === 'ptp') {
-            let synced = false;
-            let formatted = '--:--:--:--';
-            try {
-              synced = ptpv2.is_synced();
-              const time = synced ? ptpv2.ptp_time() : null;
-              if (time) {
-                const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;
-                const d = new Date((time[0] - utcOffset) * 1000 + Math.floor(time[1] / 1e6));
-                const parts = new Intl.DateTimeFormat('en-GB', {
-                  timeZone: TIMEZONE,
-                  hour: '2-digit', minute: '2-digit', second: '2-digit',
-                  hour12: false
-                }).formatToParts(d);
-                const hh = parts.find(p => p.type === 'hour').value;
-                const mm = parts.find(p => p.type === 'minute').value;
-                const ss = parts.find(p => p.type === 'second').value;
-                const fr = String(Math.floor(time[1] / (1e9 / 25))).padStart(2, '0');
-                formatted = SHOWFRAMES ? `${hh}:${mm}:${ss}:${fr}` : `${hh}:${mm}:${ss}`;
-              }
-            } catch(e) {}
-            return { id: 'ptp', label: 'PTP', time: formatted, synced };
-          } else if (seg === 'ntp') {
-            let formatted = '--:--:--';
-            if (ntpTime) {
-              const elapsed = process.hrtime(ntpLocalRef);
-              const now = new Date(ntpTime.getTime() + elapsed[0] * 1000 + Math.floor(elapsed[1] / 1e6));
-              const parts = new Intl.DateTimeFormat('en-GB', {
-                timeZone: TIMEZONE,
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: false
-              }).formatToParts(now);
-              const hh = parts.find(p => p.type === 'hour').value;
-              const mm = parts.find(p => p.type === 'minute').value;
-              const ss = parts.find(p => p.type === 'second').value;
-              const ms = String(now.getMilliseconds()).padStart(3, '0');
-              formatted = SHOWFRAMES ? `${hh}:${mm}:${ss}.${ms}` : `${hh}:${mm}:${ss}`;
-            }
-            return { id: 'ntp', label: 'NTP', time: formatted, synced: ntpSynced };
-          } else if (seg === 'clock') {
-            const now = new Date(Date.now() + clockOffsetMs);
-            const parts = new Intl.DateTimeFormat('en-GB', {
-              timeZone: TIMEZONE,
-              hour: '2-digit', minute: '2-digit', second: '2-digit',
-              hour12: false
-            }).formatToParts(now);
-            const hh = parts.find(p => p.type === 'hour').value;
-            const mm = parts.find(p => p.type === 'minute').value;
-            const ss = parts.find(p => p.type === 'second').value;
-            const ms = String(now.getMilliseconds()).padStart(3, '0');
-            const formatted = SHOWFRAMES ? `${hh}:${mm}:${ss}.${ms}` : `${hh}:${mm}:${ss}`;
-            return { id: 'clock', label: 'Clock', time: formatted, synced: true };
-          } else {
-            const chNum = parseInt(seg.replace('channel-', '')) - 1;
-            const name = CHANNEL_INFO[chNum] ? CHANNEL_INFO[chNum].name : `Channel ${chNum + 1}`;
-            const active = lastTCUpdate[chNum] > 0 && (Date.now() - lastTCUpdate[chNum]) < 5000;
-            let tc = latestTC[chNum] || '--:--:--:--';
-            if (!SHOWFRAMES) tc = tc.replace(/:[^:]*$/, '');
-            return { id: seg, label: name, time: tc, synced: active };
-          }
-        });
-        ws.send(JSON.stringify(clocks));
+        ws.send(JSON.stringify(segments.map(buildClockData)));
       } catch(e) {
         console.error('Combo WS error:', e.message);
+      }
+    }, 40);
+    ws.on('close', () => clearInterval(interval));
+    return;
+  }
+
+  // Output endpoint: /output-N — reads segments from outputs config
+  const outputMatch = req.url.match(/^\/output-(\d+)$/);
+  if (outputMatch) {
+    const outputIdx = parseInt(outputMatch[1]) - 1;
+    console.log(`Output WS connected: output-${outputIdx + 1}`);
+    const interval = setInterval(() => {
+      try {
+        const output = outputs[outputIdx];
+        if (!output || !output.segments || output.segments.length === 0) {
+          ws.send(JSON.stringify([{ id: 'none', label: 'Not configured', time: '--:--:--', synced: null }]));
+          return;
+        }
+        ws.send(JSON.stringify(output.segments.map(buildClockData)));
+      } catch(e) {
+        console.error('Output WS error:', e.message);
       }
     }, 40);
     ws.on('close', () => clearInterval(interval));
