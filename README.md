@@ -97,6 +97,8 @@ The display updates in real time with large monospaced timecodes on a black back
 
 ## Docker
 
+Not properly tested yet.
+
 ```bash
 docker build -t rtp-ltc-reader .
 docker run --net=host rtp-ltc-reader
