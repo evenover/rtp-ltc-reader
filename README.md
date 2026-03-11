@@ -84,12 +84,14 @@ node index.js
 
 The server starts on `http://localhost:<PORT>` (default 5000). Open a browser and navigate to:
 
+- `/` — **setup page** for configuring all settings, managing outputs, and monitoring status (no need to edit `config.json` manually)
 - `/channel-1` — show timecode from channel 1
 - `/channel-1+2` — show channels 1 and 2 side by side
 - `/ptp` — PTP clock display
 - `/ntp` — NTP clock display
 - `/clock` — internal clock with manual offset
 - `/ptp+channel-1` — combo view
+- `/output-1`, `/output-2`, ... — configurable output views managed from the setup page
 
 The display updates in real time with large monospaced timecodes on a black background.
 
