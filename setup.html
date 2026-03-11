@@ -719,34 +719,12 @@ async function save() {
   const msg = document.getElementById('msg');
   if (result.ok) {
     msg.className = 'msg ok';
-    msg.textContent = 'Config saved. Restarting server...';
-    waitForRestart();
+    msg.textContent = 'Config saved and applied';
+    setTimeout(() => { msg.textContent = ''; }, 3000);
   } else {
     msg.className = 'msg err';
     msg.textContent = 'Save failed';
   }
-}
-
-function waitForRestart() {
-  const msg = document.getElementById('msg');
-  let attempts = 0;
-  const check = setInterval(async () => {
-    attempts++;
-    try {
-      const res = await fetch('/api/config');
-      if (res.ok) {
-        clearInterval(check);
-        msg.textContent = 'Server restarted. Reloading...';
-        setTimeout(() => location.reload(), 500);
-      }
-    } catch (e) {
-      if (attempts > 30) {
-        clearInterval(check);
-        msg.className = 'msg err';
-        msg.textContent = 'Server did not come back. Check manually.';
-      }
-    }
-  }, 1000);
 }
 
 async function restartChannel(ch) {

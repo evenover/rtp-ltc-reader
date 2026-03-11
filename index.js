@@ -4,24 +4,24 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const ptpv2 = require('ptpv2');
-const config = require('./config.json')[0];
+let config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'))[0];
 
-const IFACE = config.IFACE;
+let IFACE = config.IFACE;
 const PORT = config.PORT;
-const MCIFACE = config.MCIFACE ? config.MCIFACE : IFACE;
-const SOURCEMULTICAST = config.SOURCEMULTICAST;
-const MCPORT = config.MCPORT;
-const STREAMSIZE = config.STREAMSIZE;
-const ENCODING = config.ENCODING || 'L24';
-const SAMPLERATE = config.SAMPLERATE || 48000;
-const SOURCEIP = config.SOURCEIP || '';
-const DOMAIN = config.DOMAIN;
-const TIMEZONE = config.TIMEZONE;
-const DECODECHANNELS = config.DECODECHANNELS;
-const SHOWFRAMES = config.SHOWFRAMES !== false;
-const LEAPSECONDS = config.LEAPSECONDS || 0;
-const NTPSERVER = config.NTPSERVER || '';
-const CHANNEL_INFO = config.CHANNEL_INFO;
+let MCIFACE = config.MCIFACE ? config.MCIFACE : IFACE;
+let SOURCEMULTICAST = config.SOURCEMULTICAST;
+let MCPORT = config.MCPORT;
+let STREAMSIZE = config.STREAMSIZE;
+let ENCODING = config.ENCODING || 'L24';
+let SAMPLERATE = config.SAMPLERATE || 48000;
+let SOURCEIP = config.SOURCEIP || '';
+let DOMAIN = config.DOMAIN;
+let TIMEZONE = config.TIMEZONE;
+let DECODECHANNELS = config.DECODECHANNELS;
+let SHOWFRAMES = config.SHOWFRAMES !== false;
+let LEAPSECONDS = config.LEAPSECONDS || 0;
+let NTPSERVER = config.NTPSERVER || '';
+let CHANNEL_INFO = config.CHANNEL_INFO;
 
 const dgram = require('dgram');
 
@@ -446,6 +446,60 @@ initPTP();
 startNTP();
 startStreamProbe();
 
+function stopStreamProbe() {
+  if (probeSocket) {
+    try { probeSocket.close(); } catch(e) {}
+    probeSocket = null;
+  }
+  streamActive = false;
+}
+
+function reloadConfig() {
+  console.log('Reloading config...');
+  const newCfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'))[0];
+
+  // Stop services that depend on config
+  stopStreamProbe();
+  stopNTP();
+  stopAllPipelines();
+
+  // Update config vars
+  config = newCfg;
+  IFACE = newCfg.IFACE;
+  MCIFACE = newCfg.MCIFACE ? newCfg.MCIFACE : IFACE;
+  SOURCEMULTICAST = newCfg.SOURCEMULTICAST;
+  MCPORT = newCfg.MCPORT;
+  STREAMSIZE = newCfg.STREAMSIZE;
+  ENCODING = newCfg.ENCODING || 'L24';
+  SAMPLERATE = newCfg.SAMPLERATE || 48000;
+  SOURCEIP = newCfg.SOURCEIP || '';
+  DOMAIN = newCfg.DOMAIN;
+  TIMEZONE = newCfg.TIMEZONE;
+  DECODECHANNELS = newCfg.DECODECHANNELS;
+  SHOWFRAMES = newCfg.SHOWFRAMES !== false;
+  LEAPSECONDS = newCfg.LEAPSECONDS || 0;
+  NTPSERVER = newCfg.NTPSERVER || '';
+  CHANNEL_INFO = newCfg.CHANNEL_INFO;
+  outputs = newCfg.OUTPUTS || [];
+  clockOffsetMs = newCfg.CLOCKOFFSET || 0;
+
+  // Rebuild decoders for new channel count / sample rate
+  ltcDecoders.length = 0;
+  for (let i = 0; i < DECODECHANNELS; i++) {
+    ltcDecoders.push(new LTCDecoder(SAMPLERATE));
+  }
+  latestTC = Array(DECODECHANNELS).fill('--:--:--:--');
+  pipelineStatus = Array(DECODECHANNELS).fill('waiting');
+  lastTCUpdate = Array(DECODECHANNELS).fill(0);
+  restartCount = Array(DECODECHANNELS).fill(0);
+
+  // Restart services
+  initPTP();
+  startNTP();
+  startStreamProbe();
+  console.log('Config reloaded successfully');
+}
+
 // Combo route: /ptp+ntp, /ptp+channel-1, /ntp+channel-1+channel-2, etc.
 const comboPattern = /^\/(?:(?:ptp|ntp|clock|channel-\d+)\+)+(?:ptp|ntp|clock|channel-\d+)$/;
 app.get('/:combo', (req, res, next) => {
@@ -575,8 +629,8 @@ app.post('/api/config', (req, res) => {
     JSON.stringify([newConfig], null, 4),
     'utf8'
   );
-  res.json({ ok: true, message: 'Config saved. Restarting...' });
-  setTimeout(() => process.exit(0), 500);
+  reloadConfig();
+  res.json({ ok: true, message: 'Config saved and applied' });
 });
 
 app.get('/api/status', (req, res) => {
