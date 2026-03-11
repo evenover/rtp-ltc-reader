@@ -4,7 +4,33 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const ptpv2 = require('ptpv2');
-let config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'))[0];
+
+const configPath = path.join(__dirname, 'config.json');
+const defaultConfig = [{
+  IFACE: '',
+  PORT: 5000,
+  MCIFACE: '',
+  SOURCEMULTICAST: '',
+  MCPORT: 5004,
+  STREAMSIZE: 8,
+  ENCODING: 'L24',
+  SAMPLERATE: 48000,
+  SOURCEIP: '',
+  TIMEZONE: 'Europe/Oslo',
+  DOMAIN: 0,
+  LEAPSECONDS: 0,
+  NTPSERVER: '',
+  DECODECHANNELS: 1,
+  SHOWFRAMES: false,
+  CHANNEL_INFO: [{ name: 'Channel 1' }],
+  OUTPUTS: []
+}];
+
+if (!fs.existsSync(configPath)) {
+  fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 4), 'utf8');
+  console.log('Created default config.json — configure via the setup page.');
+}
+let config = JSON.parse(fs.readFileSync(configPath, 'utf8'))[0];
 
 let IFACE = config.IFACE;
 const PORT = config.PORT;
@@ -442,6 +468,18 @@ function startStreamProbe() {
 for (let i = 0; i < DECODECHANNELS; i++) {
   pipelineStatus[i] = 'waiting';
 }
+console.log('--- Startup config ---');
+console.log(`  IFACE: ${IFACE || '(empty — OS will pick default)'}`);
+console.log(`  MCIFACE: ${MCIFACE || '(empty — OS will pick default)'}`);
+console.log(`  Multicast: ${SOURCEMULTICAST}:${MCPORT}${SOURCEIP ? ` (SSM source=${SOURCEIP})` : ''}`);
+console.log(`  PTP domain: ${DOMAIN}`);
+const nics = os.networkInterfaces();
+for (const [name, addrs] of Object.entries(nics)) {
+  for (const addr of addrs) {
+    if (addr.family === 'IPv4') console.log(`  NIC: ${name} = ${addr.address}`);
+  }
+}
+console.log('----------------------');
 initPTP();
 startNTP();
 startStreamProbe();
@@ -456,7 +494,7 @@ function stopStreamProbe() {
 
 function reloadConfig() {
   console.log('Reloading config...');
-  const newCfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'))[0];
+  const newCfg = JSON.parse(fs.readFileSync(configPath, 'utf8'))[0];
 
   // Stop services that depend on config
   stopStreamProbe();
@@ -574,8 +612,46 @@ app.get('/api/interfaces', (req, res) => {
   res.json(result);
 });
 
+app.get('/api/diag', (req, res) => {
+  const interfaces = os.networkInterfaces();
+  const nics = [];
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    for (const addr of addrs) {
+      if (addr.family === 'IPv4') {
+        nics.push({ name, address: addr.address, internal: addr.internal });
+      }
+    }
+  }
+  let ptpSyncedNow = false, ptpMaster = null;
+  try { ptpSyncedNow = ptpv2.is_synced(); ptpMaster = ptpSyncedNow ? ptpv2.ptp_master() : null; } catch(e) {}
+  res.json({
+    config: {
+      IFACE: IFACE || '(empty — using OS default)',
+      MCIFACE: MCIFACE || '(empty — using OS default)',
+      SOURCEMULTICAST,
+      SOURCEIP: SOURCEIP || '(empty — using ASM)',
+      MCPORT,
+      DOMAIN
+    },
+    network: {
+      interfaces: nics,
+      probeSocketOpen: !!probeSocket,
+      streamActive,
+      lastRtpPacketAgo: lastRtpPacket > 0 ? `${((Date.now() - lastRtpPacket) / 1000).toFixed(1)}s ago` : 'never'
+    },
+    ptp: { initialized: ptpInitialized, synced: ptpSyncedNow, master: ptpMaster },
+    ntp: { synced: ntpSynced, server: NTPSERVER || null },
+    hints: [
+      !IFACE ? 'IFACE is empty — PTP and multicast may bind to the wrong interface. Set it to the IP of the media network NIC.' : null,
+      !ptpInitialized ? 'PTP failed to initialize — check that IFACE is set and ports 319/320 are available.' : null,
+      ptpInitialized && !ptpSyncedNow ? 'PTP initialized but not synced — check that PTP multicast (224.0.1.129) reaches this VM. On Proxmox, disable IGMP snooping on the bridge.' : null,
+      !streamActive ? `No RTP packets received on ${SOURCEMULTICAST}:${MCPORT} — check that multicast traffic reaches this VM. On Proxmox, disable IGMP snooping on the bridge.` : null,
+    ].filter(Boolean)
+  });
+});
+
 app.get('/api/config', (req, res) => {
-  const raw = fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8');
+  const raw = fs.readFileSync(configPath, 'utf8');
   res.json(JSON.parse(raw)[0]);
 });
 
@@ -611,24 +687,16 @@ app.post('/api/outputs', (req, res) => {
   outputs = newOutputs;
 
   // Persist to config.json
-  const raw = fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8');
+  const raw = fs.readFileSync(configPath, 'utf8');
   const cfg = JSON.parse(raw);
   cfg[0].OUTPUTS = outputs;
-  fs.writeFileSync(
-    path.join(__dirname, 'config.json'),
-    JSON.stringify(cfg, null, 4),
-    'utf8'
-  );
+  fs.writeFileSync(configPath, JSON.stringify(cfg, null, 4), 'utf8');
   res.json({ ok: true });
 });
 
 app.post('/api/config', (req, res) => {
   const newConfig = req.body;
-  fs.writeFileSync(
-    path.join(__dirname, 'config.json'),
-    JSON.stringify([newConfig], null, 4),
-    'utf8'
-  );
+  fs.writeFileSync(configPath, JSON.stringify([newConfig], null, 4), 'utf8');
   reloadConfig();
   res.json({ ok: true, message: 'Config saved and applied' });
 });
