@@ -3,12 +3,12 @@
         "IFACE": "10.151.5.226",
         "PORT": 5000,
         "MCIFACE": "10.151.5.226",
-        "SOURCEMULTICAST": "239.254.151.1",
+        "SOURCEMULTICAST": "232.1.14.108",
         "MCPORT": 5004,
-        "STREAMSIZE": 2,
+        "STREAMSIZE": 8,
         "ENCODING": "L24",
         "SAMPLERATE": 48000,
-        "SOURCEIP": "10.151.5.220",
+        "SOURCEIP": "10.151.1.17",
         "TIMEZONE": "Europe/Oslo",
         "DOMAIN": 84,
         "LEAPSECONDS": 1,
@@ -17,9 +17,18 @@
         "SHOWFRAMES": false,
         "CHANNEL_INFO": [
             {
-                "name": "Program LTC"
+                "name": "LTC"
             }
         ],
-        "OUTPUTS": []
+        "OUTPUTS": [
+            {
+                "name": "Output 1",
+                "segments": [
+                    "ptp",
+                    "clock",
+                    "channel-1"
+                ]
+            }
+        ]
     }
 ]

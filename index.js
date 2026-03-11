@@ -50,6 +50,8 @@ let clockOffsetMs = config.CLOCKOFFSET || 0;  // internal clock offset from syst
 let streamActive = false;
 let lastRtpPacket = 0;
 let probeSocket = null;
+let ntpInterval = null;
+let ptpInitialized = false;
 
 // ========== LTC Decoder (pure Node.js, no GStreamer) ==========
 
@@ -68,9 +70,17 @@ class LTCDecoder {
     this.sampleCount = 0;
     this.waitingForSecondHalf = false;
     this.bits = [];
-    this.calibrating = true;
-    this.intervals = [];
-    this.threshold = 0;
+
+    // Calculate threshold from sample rate — works for 24/25/29.97/30 fps
+    // Long interval (0-bit) = sampleRate / (fps * 80), Short = Long / 2
+    // Use 25fps as reference: long=24 short=12 at 48kHz
+    const longInterval = sampleRate / (25 * 80);
+    const shortInterval = longInterval / 2;
+    this.threshold = (shortInterval + longInterval) / 2;
+    this.minInterval = shortInterval * 0.4;
+    this.maxInterval = longInterval * 2.0;
+    this.calibrating = false;
+    console.log(`LTC decoder: threshold=${this.threshold.toFixed(1)}, range=[${this.minInterval.toFixed(1)}, ${this.maxInterval.toFixed(1)}]`);
   }
 
   reset() {
@@ -78,9 +88,6 @@ class LTCDecoder {
     this.sampleCount = 0;
     this.waitingForSecondHalf = false;
     this.bits = [];
-    this.calibrating = true;
-    this.intervals = [];
-    this.threshold = 0;
   }
 
   decode(samples) {
@@ -93,10 +100,8 @@ class LTCDecoder {
         const interval = this.sampleCount;
         this.sampleCount = 0;
 
-        if (this.calibrating) {
-          if (interval > 2) this.intervals.push(interval);
-          if (this.intervals.length >= 400) this.calibrate();
-        } else {
+        // Only process intervals in the expected LTC range
+        if (interval >= this.minInterval && interval <= this.maxInterval) {
           this.processTransition(interval, results);
         }
       }
@@ -105,29 +110,7 @@ class LTCDecoder {
     return results;
   }
 
-  calibrate() {
-    const sorted = [...this.intervals].sort((a, b) => a - b);
-    const trim = Math.floor(sorted.length * 0.1);
-    const trimmed = sorted.slice(trim, sorted.length - trim);
-    if (trimmed.length < 20) { this.intervals = []; return; }
-
-    const median = trimmed[Math.floor(trimmed.length / 2)];
-    const shorts = trimmed.filter(v => v < median);
-    const longs = trimmed.filter(v => v >= median);
-
-    if (shorts.length > 5 && longs.length > 5) {
-      const avgShort = shorts.reduce((a, b) => a + b, 0) / shorts.length;
-      const avgLong = longs.reduce((a, b) => a + b, 0) / longs.length;
-      this.threshold = (avgShort + avgLong) / 2;
-      this.calibrating = false;
-      console.log(`LTC calibrated: short≈${avgShort.toFixed(1)} long≈${avgLong.toFixed(1)} threshold=${this.threshold.toFixed(1)} samples`);
-    }
-    this.intervals = [];
-  }
-
   processTransition(interval, results) {
-    if (interval < 2) return; // noise
-
     if (interval < this.threshold) {
       // Short interval — half of a "1" bit
       if (this.waitingForSecondHalf) {
@@ -234,22 +217,27 @@ for (let i = 0; i < DECODECHANNELS; i++) {
   ltcDecoders.push(new LTCDecoder(SAMPLERATE));
 }
 
-// Initialize PTP sync
-try {
-  console.log(`PTP init: IFACE=${IFACE}, DOMAIN=${DOMAIN}`);
-  ptpv2.init(IFACE, DOMAIN, () => {
-    ptpSynced = true;
-    ptpMasterID = ptpv2.ptp_master();
-    console.log(`PTP synced to master: ${ptpMasterID}`);
-  });
-} catch (e) {
-  console.error(`PTP init failed: ${e.message}`);
+function initPTP() {
+  if (ptpInitialized) return;
+  try {
+    console.log(`PTP init: IFACE=${IFACE}, DOMAIN=${DOMAIN}`);
+    ptpv2.init(IFACE, DOMAIN, () => {
+      ptpSynced = true;
+      ptpMasterID = ptpv2.ptp_master();
+      console.log(`PTP synced to master: ${ptpMasterID}`);
+    });
+    ptpInitialized = true;
+  } catch (e) {
+    console.error(`PTP init failed: ${e.message}`);
+  }
 }
 
 process.on('uncaughtException', (err) => {
   console.error(`Uncaught exception: ${err.message} (syscall: ${err.syscall || 'n/a'})`);
-  if (err.syscall === 'addMembership' || err.syscall === 'bind') {
-    // Non-fatal: PTP network issue
+  if (err.syscall === 'addMembership' || err.syscall === 'addSourceSpecificMembership' || err.syscall === 'bind') {
+    // Non-fatal: network issue
+  } else if (err.code === 'ERR_MISSING_ARGS' || err.code === 'ERR_SOCKET_DGRAM_NOT_RUNNING') {
+    // Non-fatal: PTP/NTP socket issue (e.g. Docker bridge network)
   } else {
     throw err;
   }
@@ -259,15 +247,17 @@ process.on('uncaughtException', (err) => {
 function ntpQuery() {
   if (!NTPSERVER) return;
   const client = dgram.createSocket('udp4');
+  let closed = false;
+  const safeClose = () => { if (!closed) { closed = true; try { client.close(); } catch(e) {} } };
   const msg = Buffer.alloc(48);
   msg[0] = 0x1B; // LI=0, Version=3, Mode=3 (client)
   const t1 = Date.now();
   client.send(msg, 123, NTPSERVER, (err) => {
-    if (err) { client.close(); return; }
+    if (err) { safeClose(); return; }
   });
   client.on('message', (buf) => {
     const t4 = Date.now();
-    if (buf.length < 48) { client.close(); return; }
+    if (buf.length < 48) { safeClose(); return; }
     // Transmit timestamp: seconds since 1900-01-01 at bytes 40-43, fraction at 44-47
     const secs = buf.readUInt32BE(40);
     const frac = buf.readUInt32BE(44);
@@ -277,16 +267,23 @@ function ntpQuery() {
     ntpTime = new Date(serverMs + Math.floor(rtt / 2));
     ntpLocalRef = process.hrtime();
     ntpSynced = true;
-    client.close();
+    safeClose();
   });
-  client.on('error', () => { client.close(); });
-  setTimeout(() => { try { client.close(); } catch(e) {} }, 5000);
+  client.on('error', () => { safeClose(); });
+  setTimeout(safeClose, 5000);
 }
 
-if (NTPSERVER) {
+function startNTP() {
+  if (!NTPSERVER) return;
   ntpQuery();
-  setInterval(ntpQuery, 60000);
+  ntpInterval = setInterval(ntpQuery, 60000);
   console.log(`NTP polling: server=${NTPSERVER}`);
+}
+
+function stopNTP() {
+  if (ntpInterval) { clearInterval(ntpInterval); ntpInterval = null; }
+  ntpSynced = false;
+  ntpTime = null;
 }
 
 function startPipeline(channelIndex) {
@@ -329,6 +326,19 @@ function startStreamProbe() {
       const channels = extractAudioFromRTP(buf, STREAMSIZE);
       if (!channels) return;
       for (let ch = 0; ch < DECODECHANNELS && ch < channels.length; ch++) {
+        // Track peak level for diagnostics
+        let peak = 0;
+        for (let s = 0; s < channels[ch].length; s++) {
+          const abs = Math.abs(channels[ch][s]);
+          if (abs > peak) peak = abs;
+        }
+        if (!ltcDecoders[ch]._peakLevel || peak > ltcDecoders[ch]._peakLevel) {
+          ltcDecoders[ch]._peakLevel = peak;
+        }
+
+        // Skip decoding if signal is below -50 dBFS (too low to be LTC)
+        if (peak < 0.00316) continue;
+
         const timecodes = ltcDecoders[ch].decode(channels[ch]);
         if (timecodes.length > 0) {
           latestTC[ch] = timecodes[timecodes.length - 1];
@@ -350,12 +360,17 @@ function startStreamProbe() {
 
   sock.bind(MCPORT, () => {
     try {
-      if (MCIFACE) {
+      if (SOURCEIP) {
+        // SSM (Source-Specific Multicast) — required for 232.x.x.x range
+        sock.addSourceSpecificMembership(SOURCEIP, SOURCEMULTICAST, MCIFACE || undefined);
+        console.log(`Stream probe listening on ${SOURCEMULTICAST}:${MCPORT} (SSM source=${SOURCEIP})`);
+      } else if (MCIFACE) {
         sock.addMembership(SOURCEMULTICAST, MCIFACE);
+        console.log(`Stream probe listening on ${SOURCEMULTICAST}:${MCPORT}`);
       } else {
         sock.addMembership(SOURCEMULTICAST);
+        console.log(`Stream probe listening on ${SOURCEMULTICAST}:${MCPORT}`);
       }
-      console.log(`Stream probe listening on ${SOURCEMULTICAST}:${MCPORT}`);
     } catch (e) {
       console.error(`Stream probe join failed: ${e.message}`);
     }
@@ -370,12 +385,65 @@ function startStreamProbe() {
       stopAllPipelines();
     }
   }, 1000);
+
+  // Diagnostic: scan ALL stream channels for signal levels
+  const scanPeaks = new Float64Array(STREAMSIZE);
+  const scanCrossings = new Uint32Array(STREAMSIZE);
+  const scanPrevSign = new Int8Array(STREAMSIZE);
+  let scanPackets = 0;
+
+  sock.on('message', (buf) => {
+    if (scanPackets >= 0) {
+      scanPackets++;
+      try {
+        const allCh = extractAudioFromRTP(buf, STREAMSIZE);
+        if (!allCh) return;
+        for (let ch = 0; ch < STREAMSIZE; ch++) {
+          for (let s = 0; s < allCh[ch].length; s++) {
+            const abs = Math.abs(allCh[ch][s]);
+            if (abs > scanPeaks[ch]) scanPeaks[ch] = abs;
+            const sign = allCh[ch][s] >= 0 ? 1 : -1;
+            if (scanPrevSign[ch] !== 0 && sign !== scanPrevSign[ch]) scanCrossings[ch]++;
+            scanPrevSign[ch] = sign;
+          }
+        }
+      } catch(e) {}
+    }
+  });
+
+  setTimeout(() => {
+    console.log(`\n=== Channel scan (${STREAMSIZE} channels, ${scanPackets} packets) ===`);
+    for (let ch = 0; ch < STREAMSIZE; ch++) {
+      const peakDb = scanPeaks[ch] > 0 ? (20 * Math.log10(scanPeaks[ch])).toFixed(1) : '-inf';
+      const crossRate = scanCrossings[ch]; // over ~5 seconds
+      const looksLikeLTC = crossRate > 5000 && crossRate < 25000;
+      console.log(`  ch${ch + 1}: peak=${peakDb}dBFS, crossings=${crossRate}${looksLikeLTC ? ' ◄ likely LTC' : ''}`);
+    }
+    console.log('===\n');
+    scanPackets = -1; // stop scanning
+  }, 5000);
+
+  // Diagnostic log every 5 seconds for decode channels
+  let diagCount = 0;
+  setInterval(() => {
+    if (!streamActive) return;
+    diagCount++;
+    if (diagCount > 12) return; // stop after 60s
+    for (let ch = 0; ch < DECODECHANNELS; ch++) {
+      const d = ltcDecoders[ch];
+      const peakDb = d._peakLevel ? (20 * Math.log10(d._peakLevel)).toFixed(1) : '-inf';
+      console.log(`[diag] ch${ch + 1}: peak=${peakDb}dBFS, bits=${d.bits.length}, tc=${latestTC[ch]}`);
+      d._peakLevel = 0; // reset for next period
+    }
+  }, 5000);
 }
 
-// Set initial state and start probe
+// Auto-start all services
 for (let i = 0; i < DECODECHANNELS; i++) {
   pipelineStatus[i] = 'waiting';
 }
+initPTP();
+startNTP();
 startStreamProbe();
 
 // Combo route: /ptp+ntp, /ptp+channel-1, /ntp+channel-1+channel-2, etc.
@@ -526,12 +594,12 @@ app.get('/api/status', (req, res) => {
       maxRestarts: MAX_RESTARTS
     });
   }
+  let ptpSyncedNow = false;
+  let ptpMaster = null;
+  try { ptpSyncedNow = ptpv2.is_synced(); ptpMaster = ptpSyncedNow ? ptpv2.ptp_master() : null; } catch(e) {}
   res.json({
     stream: streamActive,
-    ptp: {
-      synced: ptpv2.is_synced(),
-      master: ptpv2.is_synced() ? ptpv2.ptp_master() : null
-    },
+    ptp: { synced: ptpSyncedNow, master: ptpMaster },
     ntp: {
       synced: ntpSynced,
       server: NTPSERVER || null
@@ -558,12 +626,12 @@ wss.on('connection', (ws, req) => {
           maxRestarts: MAX_RESTARTS
         });
       }
+      let ptpSyncedNow = false;
+      let ptpMaster = null;
+      try { ptpSyncedNow = ptpv2.is_synced(); ptpMaster = ptpSyncedNow ? ptpv2.ptp_master() : null; } catch(e) {}
       ws.send(JSON.stringify({
         stream: streamActive,
-        ptp: {
-          synced: ptpv2.is_synced(),
-          master: ptpv2.is_synced() ? ptpv2.ptp_master() : null
-        },
+        ptp: { synced: ptpSyncedNow, master: ptpMaster },
         ntp: {
           synced: ntpSynced,
           server: NTPSERVER || null
@@ -578,9 +646,8 @@ wss.on('connection', (ws, req) => {
   // PTP clock endpoint
   if (req.url === '/ptp') {
     const interval = setInterval(() => {
-      const synced = ptpv2.is_synced();
-      const time = synced ? ptpv2.ptp_time() : null;
-      const master = synced ? ptpv2.ptp_master() : null;
+      let synced = false, time = null, master = null;
+      try { synced = ptpv2.is_synced(); time = synced ? ptpv2.ptp_time() : null; master = synced ? ptpv2.ptp_master() : null; } catch(e) {}
       let formatted = '--:--:--:--';
       if (time) {
         const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;

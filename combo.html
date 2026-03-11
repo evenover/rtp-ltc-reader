@@ -16,6 +16,7 @@ html, body {
 #grid {
   display:grid;
   height:100vh;
+  width:100vw;
   place-items:center;
 }
 
@@ -24,14 +25,17 @@ html, body {
   flex-direction:column;
   justify-content:center;
   align-items:center;
+  width:100%;
+  height:100%;
 }
 
 .label {
-  font-size:2vw;
+  font-size:5rem;
   opacity:0.7;
   display:flex;
   align-items:center;
   gap:0.5em;
+  white-space:nowrap;
 }
 
 .sync-ball {
@@ -51,7 +55,7 @@ html, body {
 }
 
 .time {
-  font-size:16vw;
+  white-space:nowrap;
 }
 </style>
 </head>
@@ -63,18 +67,44 @@ html, body {
 const wsPath = location.pathname.replace(/%2B/gi, '+').replace(/ /g, '+');
 const grid = document.getElementById("grid");
 let currentIds = '';
+let currentCols = 0, currentRows = 0;
+
+function getGridLayout(n) {
+  if (n <= 2) return { cols: 1, rows: n };
+  return { cols: Math.ceil(n / 2), rows: 2 };
+}
+
+function fitClocks() {
+  const items = grid.querySelectorAll('.clock');
+  if (!items.length) return;
+  const n = items.length;
+  const { cols, rows } = getGridLayout(n);
+  const cellW = window.innerWidth / cols;
+  const cellH = window.innerHeight / rows;
+
+  items.forEach(item => {
+    const timeEl = item.querySelector('.time');
+    const labelEl = item.querySelector('.label');
+    const text = timeEl.innerText || '--:--:--:--';
+    const charCount = text.length || 11;
+    // Monospace char width ~0.62em; leave horizontal padding
+    const maxByWidth = (cellW * 0.95) / (charCount * 0.62);
+    // Leave room for label (~18% of cell) and vertical padding
+    const maxByHeight = cellH * 0.7;
+    const fontSize = Math.floor(Math.min(maxByWidth, maxByHeight));
+    timeEl.style.fontSize = fontSize + 'px';
+  });
+}
 
 function buildGrid(clocks) {
   grid.innerHTML = '';
   const n = clocks.length;
-  if (n <= 2) {
-    grid.style.gridTemplateColumns = '1fr';
-    grid.style.gridTemplateRows = Array(n).fill('1fr').join(' ');
-  } else {
-    const cols = Math.ceil(n / 2);
-    grid.style.gridTemplateColumns = Array(cols).fill('1fr').join(' ');
-    grid.style.gridTemplateRows = '1fr 1fr';
-  }
+  const { cols, rows } = getGridLayout(n);
+  currentCols = cols;
+  currentRows = rows;
+  grid.style.gridTemplateColumns = Array(cols).fill('1fr').join(' ');
+  grid.style.gridTemplateRows = Array(rows).fill('1fr').join(' ');
+
   clocks.forEach(c => {
     const wrapper = document.createElement("div");
     wrapper.className = "clock";
@@ -82,8 +112,6 @@ function buildGrid(clocks) {
 
     const label = document.createElement("div");
     label.className = "label";
-    if (n > 4) label.style.fontSize = '0.8vw';
-    else if (n > 2) label.style.fontSize = '1vw';
 
     const ball = document.createElement("span");
     ball.className = "sync-ball" + (c.synced === null ? " hidden" : (c.synced ? " synced" : ""));
@@ -96,15 +124,18 @@ function buildGrid(clocks) {
 
     const time = document.createElement("div");
     time.className = "time";
-    if (n > 4) time.style.fontSize = '5vw';
-    else if (n > 2) time.style.fontSize = '8vw';
     time.innerText = c.time;
 
     wrapper.appendChild(label);
     wrapper.appendChild(time);
     grid.appendChild(wrapper);
   });
+  fitClocks();
 }
+
+window.addEventListener('resize', fitClocks);
+
+let lastCharCounts = '';
 
 function connect() {
   const ws = new WebSocket("ws://" + location.host + wsPath);
@@ -130,6 +161,13 @@ function connect() {
         ball.className = c.synced ? "sync-ball synced" : "sync-ball";
       }
     });
+
+    // Refit if character count changed (e.g. frames toggled)
+    const charCounts = clocks.map(c => c.time.length).join(',');
+    if (charCounts !== lastCharCounts) {
+      lastCharCounts = charCounts;
+      fitClocks();
+    }
   };
 
   ws.onclose = () => setTimeout(connect, 1000);
