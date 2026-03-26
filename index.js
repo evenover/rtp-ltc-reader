@@ -22,7 +22,7 @@ const defaultConfig = [{
   NTPSERVER: '',
   DECODECHANNELS: 1,
   SHOWFRAMES: false,
-  CHANNEL_INFO: [{ name: 'Channel 1' }],
+  CHANNEL_INFO: [{ name: 'Channel 1', streamChannel: 1 }],
   OUTPUTS: []
 }];
 
@@ -43,11 +43,14 @@ let SAMPLERATE = config.SAMPLERATE || 48000;
 let SOURCEIP = config.SOURCEIP || '';
 let DOMAIN = config.DOMAIN;
 let TIMEZONE = config.TIMEZONE;
-let DECODECHANNELS = config.DECODECHANNELS;
+let CHANNEL_INFO = (config.CHANNEL_INFO || []).map((ch, i) => ({
+  name: ch.name || `Channel ${i + 1}`,
+  streamChannel: ch.streamChannel != null ? ch.streamChannel : i + 1
+}));
+let DECODECHANNELS = CHANNEL_INFO.length;
 let SHOWFRAMES = config.SHOWFRAMES !== false;
 let LEAPSECONDS = config.LEAPSECONDS || 0;
 let NTPSERVER = config.NTPSERVER || '';
-let CHANNEL_INFO = config.CHANNEL_INFO;
 
 const dgram = require('dgram');
 
@@ -351,11 +354,14 @@ function startStreamProbe() {
     try {
       const channels = extractAudioFromRTP(buf, STREAMSIZE);
       if (!channels) return;
-      for (let ch = 0; ch < DECODECHANNELS && ch < channels.length; ch++) {
+      for (let ch = 0; ch < DECODECHANNELS; ch++) {
+        const streamCh = (CHANNEL_INFO[ch].streamChannel || (ch + 1)) - 1; // 0-based stream index
+        if (streamCh < 0 || streamCh >= channels.length) continue;
+
         // Track peak level for diagnostics
         let peak = 0;
-        for (let s = 0; s < channels[ch].length; s++) {
-          const abs = Math.abs(channels[ch][s]);
+        for (let s = 0; s < channels[streamCh].length; s++) {
+          const abs = Math.abs(channels[streamCh][s]);
           if (abs > peak) peak = abs;
         }
         if (!ltcDecoders[ch]._peakLevel || peak > ltcDecoders[ch]._peakLevel) {
@@ -365,7 +371,7 @@ function startStreamProbe() {
         // Skip decoding if signal is below -50 dBFS (too low to be LTC)
         if (peak < 0.00316) continue;
 
-        const timecodes = ltcDecoders[ch].decode(channels[ch]);
+        const timecodes = ltcDecoders[ch].decode(channels[streamCh]);
         if (timecodes.length > 0) {
           latestTC[ch] = timecodes[timecodes.length - 1];
           lastTCUpdate[ch] = Date.now();
@@ -457,8 +463,9 @@ function startStreamProbe() {
     if (diagCount > 12) return; // stop after 60s
     for (let ch = 0; ch < DECODECHANNELS; ch++) {
       const d = ltcDecoders[ch];
+      const streamCh = CHANNEL_INFO[ch] ? CHANNEL_INFO[ch].streamChannel : ch + 1;
       const peakDb = d._peakLevel ? (20 * Math.log10(d._peakLevel)).toFixed(1) : '-inf';
-      console.log(`[diag] ch${ch + 1}: peak=${peakDb}dBFS, bits=${d.bits.length}, tc=${latestTC[ch]}`);
+      console.log(`[diag] decode-ch${ch + 1} (stream-ch${streamCh}): peak=${peakDb}dBFS, bits=${d.bits.length}, tc=${latestTC[ch]}`);
       d._peakLevel = 0; // reset for next period
     }
   }, 5000);
@@ -513,7 +520,11 @@ function reloadConfig() {
   SOURCEIP = newCfg.SOURCEIP || '';
   DOMAIN = newCfg.DOMAIN;
   TIMEZONE = newCfg.TIMEZONE;
-  DECODECHANNELS = newCfg.DECODECHANNELS;
+  CHANNEL_INFO = (newCfg.CHANNEL_INFO || []).map((ch, i) => ({
+    name: ch.name || `Channel ${i + 1}`,
+    streamChannel: ch.streamChannel != null ? ch.streamChannel : i + 1
+  }));
+  DECODECHANNELS = CHANNEL_INFO.length;
   SHOWFRAMES = newCfg.SHOWFRAMES !== false;
   LEAPSECONDS = newCfg.LEAPSECONDS || 0;
   NTPSERVER = newCfg.NTPSERVER || '';
@@ -709,6 +720,7 @@ app.get('/api/status', (req, res) => {
     channels.push({
       channel: i + 1,
       name: CHANNEL_INFO[i] ? CHANNEL_INFO[i].name : `Channel ${i + 1}`,
+      streamChannel: CHANNEL_INFO[i] ? CHANNEL_INFO[i].streamChannel : i + 1,
       pipeline: pipelineStatus[i],
       tc: latestTC[i],
       receiving: active,
@@ -741,6 +753,7 @@ wss.on('connection', (ws, req) => {
         channels.push({
           channel: i + 1,
           name: CHANNEL_INFO[i] ? CHANNEL_INFO[i].name : `Channel ${i + 1}`,
+          streamChannel: CHANNEL_INFO[i] ? CHANNEL_INFO[i].streamChannel : i + 1,
           pipeline: pipelineStatus[i],
           tc: latestTC[i],
           receiving: active,

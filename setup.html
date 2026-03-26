@@ -488,10 +488,6 @@ details.sdp-details button:hover {
     </div>
 
     <div>
-      <label>Decode Channels</label>
-      <input id="channels" type="number" min="1" max="64" placeholder="16">
-    </div>
-    <div>
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:1.6rem">
         <input id="showframes" type="checkbox" style="width:auto"> Show frames
       </label>
@@ -499,9 +495,9 @@ details.sdp-details button:hover {
 
     <div class="span2">
       <fieldset>
-        <legend>Channel Names</legend>
+        <legend>Decode Channels (stream ch → name)</legend>
         <div id="channel-list"></div>
-        <button class="add-btn" onclick="addChannel()">+ Add</button>
+        <button class="add-btn" onclick="addChannel()">+ Add Channel</button>
       </fieldset>
     </div>
 
@@ -631,32 +627,50 @@ async function loadInterfaces() {
 
 function renderChannels(channelInfo) {
   const list = document.getElementById('channel-list');
+  const streamSize = parseInt(document.getElementById('streamsize').value) || 64;
   list.innerHTML = '';
   channelInfo.forEach((ch, i) => {
     const row = document.createElement('div');
     row.className = 'channel-row';
-    row.innerHTML = `<span>${i + 1}</span><input type="text" value="${ch.name}" data-ch="${i}"><button class="remove-btn" onclick="removeChannel(${i})">✕</button>`;
+    const streamCh = ch.streamChannel != null ? ch.streamChannel : i + 1;
+    let options = '';
+    for (let s = 1; s <= streamSize; s++) {
+      options += `<option value="${s}"${s === streamCh ? ' selected' : ''}>${s}</option>`;
+    }
+    row.innerHTML = `<span>${i + 1}</span><select data-stream-ch="${i}" style="width:3.5rem;flex:none" title="Stream channel to decode">${options}</select><input type="text" value="${ch.name}" data-ch="${i}"><button class="remove-btn" onclick="removeChannel(${i})">✕</button>`;
     list.appendChild(row);
   });
+  // Re-render outputs so segment dropdowns reflect current channels
+  if (typeof renderOutputs === 'function') renderOutputs();
 }
 
 function addChannel() {
   const list = document.getElementById('channel-list');
-  const idx = list.children.length;
-  const row = document.createElement('div');
-  row.className = 'channel-row';
-  row.innerHTML = `<span>${idx + 1}</span><input type="text" value="Channel ${idx + 1}" data-ch="${idx}"><button class="remove-btn" onclick="removeChannel(${idx})">✕</button>`;
-  list.appendChild(row);
-  document.getElementById('channels').value = list.children.length;
+  const inputs = list.querySelectorAll('input[data-ch]');
+  const selects = list.querySelectorAll('select[data-stream-ch]');
+  const existing = Array.from(inputs).map((inp, i) => ({
+    name: inp.value,
+    streamChannel: parseInt(selects[i].value) || (i + 1)
+  }));
+  // Find next unused stream channel
+  const usedChannels = existing.map(c => c.streamChannel);
+  const streamSize = parseInt(document.getElementById('streamsize').value) || 64;
+  let nextCh = 1;
+  while (usedChannels.includes(nextCh) && nextCh <= streamSize) nextCh++;
+  existing.push({ name: 'Channel ' + (existing.length + 1), streamChannel: nextCh });
+  renderChannels(existing);
 }
 
 function removeChannel(idx) {
   const list = document.getElementById('channel-list');
-  const inputs = list.querySelectorAll('input');
-  const names = Array.from(inputs).map(i => ({ name: i.value }));
-  names.splice(idx, 1);
-  renderChannels(names);
-  document.getElementById('channels').value = names.length;
+  const inputs = list.querySelectorAll('input[data-ch]');
+  const selects = list.querySelectorAll('select[data-stream-ch]');
+  const channels = Array.from(inputs).map((inp, i) => ({
+    name: inp.value,
+    streamChannel: parseInt(selects[i].value) || (i + 1)
+  }));
+  channels.splice(idx, 1);
+  renderChannels(channels);
 }
 
 async function load() {
@@ -677,15 +691,42 @@ async function load() {
   document.getElementById('leapseconds').value = cfg.LEAPSECONDS ?? 0;
   document.getElementById('ntpserver').value = cfg.NTPSERVER || '';
   document.getElementById('timezone').value = cfg.TIMEZONE || 'UTC';
-  document.getElementById('channels').value = cfg.DECODECHANNELS || 1;
   document.getElementById('showframes').checked = cfg.SHOWFRAMES !== false;
 
-  renderChannels(cfg.CHANNEL_INFO || []);
+  // Normalize CHANNEL_INFO with streamChannel defaults
+  const channelInfo = (cfg.CHANNEL_INFO || []).map((ch, i) => ({
+    name: ch.name || `Channel ${i + 1}`,
+    streamChannel: ch.streamChannel != null ? ch.streamChannel : i + 1
+  }));
+  renderChannels(channelInfo);
 }
 
+function getCurrentChannelInfo() {
+  const inputs = document.querySelectorAll('#channel-list input[data-ch]');
+  const selects = document.querySelectorAll('#channel-list select[data-stream-ch]');
+  return Array.from(inputs).map((inp, i) => ({
+    name: inp.value,
+    streamChannel: parseInt(selects[i].value) || (i + 1)
+  }));
+}
+
+document.getElementById('streamsize').addEventListener('change', () => {
+  renderChannels(getCurrentChannelInfo());
+});
+
+document.getElementById('channel-list').addEventListener('input', (e) => {
+  if (e.target.dataset.ch !== undefined) {
+    renderOutputs();
+  }
+});
+
 async function save() {
-  const channelInputs = document.querySelectorAll('#channel-list input');
-  const channelInfo = Array.from(channelInputs).map(i => ({ name: i.value }));
+  const channelInputs = document.querySelectorAll('#channel-list input[data-ch]');
+  const channelSelects = document.querySelectorAll('#channel-list select[data-stream-ch]');
+  const channelInfo = Array.from(channelInputs).map((inp, i) => ({
+    name: inp.value,
+    streamChannel: parseInt(channelSelects[i].value) || (i + 1)
+  }));
 
   const currentCfg = await (await fetch('/api/config')).json();
 
@@ -703,7 +744,7 @@ async function save() {
     DOMAIN: parseInt(document.getElementById('domain').value),
     LEAPSECONDS: parseInt(document.getElementById('leapseconds').value) || 0,
     NTPSERVER: document.getElementById('ntpserver').value,
-    DECODECHANNELS: parseInt(document.getElementById('channels').value),
+    DECODECHANNELS: channelInfo.length,
     SHOWFRAMES: document.getElementById('showframes').checked,
     CHANNEL_INFO: channelInfo,
     OUTPUTS: outputsData
@@ -794,7 +835,7 @@ function connectStatus() {
         label = 'Stopped';
       }
 
-      chEl.innerHTML += `<div class="status-row"><span><a href="/channel-${ch.channel}" target="_blank">Ch ${ch.channel}: ${ch.name}</a></span><span><span class="dot ${dotClass}"></span>${label}<button class="restart-btn" onclick="restartChannel(${ch.channel})" title="Restart channel ${ch.channel}">&#x21bb;</button></span></div>`;
+      chEl.innerHTML += `<div class="status-row"><span><a href="/channel-${ch.channel}" target="_blank">Ch ${ch.channel} (str ${ch.streamChannel}): ${ch.name}</a></span><span><span class="dot ${dotClass}"></span>${label}<button class="restart-btn" onclick="restartChannel(${ch.channel})" title="Restart channel ${ch.channel}">&#x21bb;</button></span></div>`;
     });
   };
 
@@ -855,7 +896,7 @@ let outputsData = [];
 
 function getAvailableSegments() {
   const segs = ['ptp', 'ntp', 'clock'];
-  const n = parseInt(document.getElementById('channels').value) || 1;
+  const n = document.querySelectorAll('#channel-list input[data-ch]').length || 0;
   for (let i = 1; i <= n; i++) segs.push('channel-' + i);
   return segs;
 }
@@ -865,7 +906,7 @@ function segLabel(seg) {
   if (seg === 'ntp') return 'NTP';
   if (seg === 'clock') return 'Clock';
   const ch = parseInt(seg.replace('channel-', '')) - 1;
-  const list = document.querySelectorAll('#channel-list input');
+  const list = document.querySelectorAll('#channel-list input[data-ch]');
   return list[ch] ? list[ch].value : seg;
 }
 
