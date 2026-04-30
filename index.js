@@ -60,10 +60,19 @@ let outputs = config.OUTPUTS || [];
 const app = express();
 app.use(express.json());
 const server = app.listen(PORT, () =>
-  console.log(`Server på http://localhost:${PORT}`)
+  console.log(`Server listening on http://localhost:${PORT}`)
 );
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\nError: Port ${PORT} is already in use.\nRun: lsof -ti :${PORT} | xargs kill -9\nThen restart.\n`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
 
 const wss = new WebSocket.Server({ server });
+wss.on('error', () => {});
 
 let latestTC = Array(DECODECHANNELS).fill("--:--:--:--");
 let pipelineStatus = Array(DECODECHANNELS).fill('stopped');
@@ -568,6 +577,15 @@ app.get('/output-:id', (req, res) => {
 
 app.get('/ptp', (req, res) => {
   res.sendFile(path.join(__dirname, 'ptp.html'));
+});
+app.get('/api/ptp', (req, res) => {
+  if (!ptpSynced) return res.json({ synced: false });
+  let time = null;
+  try { time = ptpv2.ptp_time(); } catch(e) {}
+  if (!time) return res.json({ synced: false });
+  const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;
+  const epochMs = (time[0] - utcOffset) * 1000 + Math.floor(time[1] / 1e6);
+  res.json({ synced: true, master: ptpMasterID, epoch: epochMs });
 });
 
 app.get('/ntp', (req, res) => {
