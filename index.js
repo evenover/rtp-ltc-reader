@@ -785,11 +785,16 @@ wss.on('connection', (ws, req) => {
         });
       }
       let ptpSyncedNow = false;
-      let ptpMaster = null;
-      try { ptpSyncedNow = ptpv2.is_synced(); ptpMaster = ptpSyncedNow ? ptpv2.ptp_master() : null; } catch(e) {}
+      let ptpGrandmaster = null;
+      let ptpClockId = null;
+      try {
+        ptpSyncedNow = ptpv2.is_synced();
+        ptpGrandmaster = ptpSyncedNow && typeof ptpv2.ptp_grandmaster === 'function' ? ptpv2.ptp_grandmaster() : null;
+        ptpClockId = typeof ptpv2.clock_identity === 'function' ? ptpv2.clock_identity() : null;
+      } catch(e) {}
       ws.send(JSON.stringify({
         stream: streamActive,
-        ptp: { synced: ptpSyncedNow, master: ptpMaster },
+        ptp: { synced: ptpSyncedNow, grandmaster: ptpGrandmaster, clockIdentity: ptpClockId },
         ntp: {
           synced: ntpSynced,
           server: NTPSERVER || null
