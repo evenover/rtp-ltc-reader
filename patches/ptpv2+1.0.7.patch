@@ -1,8 +1,6 @@
-diff --git a/node_modules/ptpv2/ptp.js b/node_modules/ptpv2/ptp.js
-index f5dd89c..768ca2b 100644
---- a/node_modules/ptpv2/ptp.js
-+++ b/node_modules/ptpv2/ptp.js
-@@ -12,25 +12,61 @@ var minSyncInterval = 10000; // in ms
+--- /tmp/package/ptp.js	1985-10-26 09:15:00
++++ /Users/evenoverby/Documents/Kode/rtp-ltc-reader/node_modules/ptpv2/ptp.js	2026-05-07 10:33:27
+@@ -12,25 +12,62 @@
  var ptpClientEvent = dgram.createSocket({ type: 'udp4', reuseAddr: true });
  var ptpClientGeneral = dgram.createSocket({ type: 'udp4', reuseAddr: true });
  var ptpMulticastAddrs = ['224.0.1.129', '224.0.1.130', '224.0.1.131', '224.0.1.132'];
@@ -17,7 +15,8 @@ index f5dd89c..768ca2b 100644
  var lastSync = 0;
 +var syncByte0 = 0x00; // transport-specific nibble from master's Sync
 +var currentUtcOffset = 37; // TAI-UTC offset, updated from Announce messages
-+
++var grandmasterID = null;
+ 
 +// Generate clock identity from MAC address (EUI-64 format)
 +var os = require('os');
 +var clockIdentity = Buffer.alloc(8);
@@ -44,7 +43,7 @@ index f5dd89c..768ca2b 100644
 +	}
 +}
 +var portNumber = 1;
- 
++
  //functions
  //creates ptp delay_req buffer
  var ptp_delay_req = function(){
@@ -66,10 +65,18 @@ index f5dd89c..768ca2b 100644
  	
  	return buffer;
  }
-@@ -61,18 +97,25 @@ exports.ptp_master = function(){
+@@ -61,18 +98,33 @@
  	return ptpMaster;
  }
  
++exports.ptp_grandmaster = function(){
++	return grandmasterID;
++}
++
++exports.clock_identity = function(){
++	return clockIdentity.toString('hex').match(/.{1,2}/g).join('-');
++}
++
 +exports.utc_offset = function(){
 +	return currentUtcOffset;
 +}
@@ -93,7 +100,7 @@ index f5dd89c..768ca2b 100644
  });
  
  ptpClientEvent.on('message', function(buffer, remote) {
-@@ -98,6 +141,9 @@ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -98,6 +150,9 @@
  	if(type != 0)//only process sync messages
  		return;
  
@@ -103,7 +110,7 @@ index f5dd89c..768ca2b 100644
  	//do we have a new ptp master?
  	if(source != ptpMaster){
  		ptpMaster = source;
-@@ -110,7 +156,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -110,7 +165,7 @@
  	//check if master is two step or not
  	if((flags & 0x0200) == 0x0200){
  		//two step, wait for follow_up msg for accurate t1
@@ -112,7 +119,7 @@ index f5dd89c..768ca2b 100644
  	}else if(Date.now() - lastSync > minSyncInterval){
  		//got accurate t1 (no follow_up msg)
  		ts1 = recv_ts;
-@@ -121,7 +167,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -121,7 +176,7 @@
  		t1 = [tsS, tsNS];
  
  		//send delay_req
@@ -121,7 +128,7 @@ index f5dd89c..768ca2b 100644
  			t2 = getCorrectedTime();
  		});
  
-@@ -131,7 +177,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
+@@ -131,7 +186,7 @@
  
  //general msg Client
  ptpClientGeneral.on('listening', function() {
@@ -130,13 +137,14 @@ index f5dd89c..768ca2b 100644
  });
  
  ptpClientGeneral.on('message', function(buffer, remote) {
-@@ -155,20 +201,33 @@ ptpClientGeneral.on('message', function(buffer, remote) {
+@@ -155,20 +210,34 @@
  	if(version != 2 || domain != ptp_domain)
  		return;
  
 -	if(type == 0x08 && sync_seq == sequence && Date.now() - lastSync > minSyncInterval){ //follow up msg with current seq
-+	if(type == 0x0b && buffer.length >= 54){ //announce msg
++	if(type == 0x0b && buffer.length >= 61){ //announce msg
 +		currentUtcOffset = buffer.readInt16BE(44);
++		grandmasterID = buffer.toString('hex', 53, 61).match(/.{1,2}/g).join('-');
 +	}
 +
 +	if(type == 0x08 && sync_ts1[sequence] && Date.now() - lastSync > minSyncInterval){ //follow up msg with stored ts1

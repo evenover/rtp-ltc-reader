@@ -81,6 +81,8 @@ let restartCount = Array(DECODECHANNELS).fill(0);
 const MAX_RESTARTS = 5;
 let ptpSynced = false;
 let ptpMasterID = null;
+let ptpGrandmasterID = null;
+let ptpClockIdentity = null;
 let ntpTime = null;      // last NTP-derived Date
 let ntpLocalRef = null;   // process.hrtime() at last NTP sync
 let ntpSynced = false;
@@ -262,6 +264,8 @@ function initPTP() {
     ptpv2.init(IFACE, DOMAIN, () => {
       ptpSynced = true;
       ptpMasterID = ptpv2.ptp_master();
+      ptpGrandmasterID = ptpv2.ptp_grandmaster();
+      ptpClockIdentity = ptpv2.clock_identity();
       console.log(`PTP synced to master: ${ptpMasterID}`);
     });
     ptpInitialized = true;
@@ -585,7 +589,7 @@ app.get('/api/ptp', (req, res) => {
   if (!time) return res.json({ synced: false });
   const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;
   const epochMs = (time[0] - utcOffset) * 1000 + Math.floor(time[1] / 1e6);
-  res.json({ synced: true, master: ptpMasterID, epoch: epochMs });
+  res.json({ synced: true, master: ptpMasterID, grandmaster: ptpGrandmasterID, clockIdentity: ptpClockIdentity, epoch: epochMs });
 });
 
 app.get('/ntp', (req, res) => {
