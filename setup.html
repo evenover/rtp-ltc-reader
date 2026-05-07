@@ -791,7 +791,7 @@ function connectStatus() {
 
     const ptpEl = document.getElementById('ptp-status');
     if (status.ptp.synced) {
-      ptpEl.innerHTML = `<span class="dot green"></span>Synced — Master: ${status.ptp.master}`;
+      ptpEl.innerHTML = `<span class="dot green"></span>Synced — GM: ${status.ptp.grandmaster || 'unknown'}`;
     } else {
       ptpEl.innerHTML = '<span class="dot red"></span>Not synced';
     }

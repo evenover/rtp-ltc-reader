@@ -589,7 +589,7 @@ app.get('/api/ptp', (req, res) => {
   if (!time) return res.json({ synced: false });
   const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;
   const epochMs = (time[0] - utcOffset) * 1000 + Math.floor(time[1] / 1e6);
-  res.json({ synced: true, master: ptpMasterID, grandmaster: ptpGrandmasterID, clockIdentity: ptpClockIdentity, epoch: epochMs });
+  res.json({ synced: true, grandmaster: ptpGrandmasterID, clockIdentity: ptpClockIdentity, epoch: epochMs });
 });
 
 app.get('/ntp', (req, res) => {
@@ -655,8 +655,8 @@ app.get('/api/diag', (req, res) => {
       }
     }
   }
-  let ptpSyncedNow = false, ptpMaster = null;
-  try { ptpSyncedNow = ptpv2.is_synced(); ptpMaster = ptpSyncedNow ? ptpv2.ptp_master() : null; } catch(e) {}
+  let ptpSyncedNow = false;
+  try { ptpSyncedNow = ptpv2.is_synced(); } catch(e) {}
   res.json({
     config: {
       IFACE: IFACE || '(empty — using OS default)',
@@ -672,7 +672,7 @@ app.get('/api/diag', (req, res) => {
       streamActive,
       lastRtpPacketAgo: lastRtpPacket > 0 ? `${((Date.now() - lastRtpPacket) / 1000).toFixed(1)}s ago` : 'never'
     },
-    ptp: { initialized: ptpInitialized, synced: ptpSyncedNow, master: ptpMaster },
+    ptp: { initialized: ptpInitialized, synced: ptpSyncedNow, grandmaster: ptpSyncedNow ? ptpGrandmasterID : null, clockIdentity: ptpClockIdentity },
     ntp: { synced: ntpSynced, server: NTPSERVER || null },
     hints: [
       !IFACE ? 'IFACE is empty — PTP and multicast may bind to the wrong interface. Set it to the IP of the media network NIC.' : null,
@@ -751,11 +751,10 @@ app.get('/api/status', (req, res) => {
     });
   }
   let ptpSyncedNow = false;
-  let ptpMaster = null;
-  try { ptpSyncedNow = ptpv2.is_synced(); ptpMaster = ptpSyncedNow ? ptpv2.ptp_master() : null; } catch(e) {}
+  try { ptpSyncedNow = ptpv2.is_synced(); } catch(e) {}
   res.json({
     stream: streamActive,
-    ptp: { synced: ptpSyncedNow, master: ptpMaster },
+    ptp: { synced: ptpSyncedNow, grandmaster: ptpSyncedNow ? ptpGrandmasterID : null, clockIdentity: ptpClockIdentity },
     ntp: {
       synced: ntpSynced,
       server: NTPSERVER || null
