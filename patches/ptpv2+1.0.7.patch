@@ -1,6 +1,8 @@
---- /tmp/package/ptp.js	1985-10-26 09:15:00
-+++ /Users/evenoverby/Documents/Kode/rtp-ltc-reader/node_modules/ptpv2/ptp.js	2026-05-07 10:33:27
-@@ -12,25 +12,62 @@
+diff --git a/node_modules/ptpv2/ptp.js b/node_modules/ptpv2/ptp.js
+index f5dd89c..51cd579 100644
+--- a/node_modules/ptpv2/ptp.js
++++ b/node_modules/ptpv2/ptp.js
+@@ -12,25 +12,62 @@ var minSyncInterval = 10000; // in ms
  var ptpClientEvent = dgram.createSocket({ type: 'udp4', reuseAddr: true });
  var ptpClientGeneral = dgram.createSocket({ type: 'udp4', reuseAddr: true });
  var ptpMulticastAddrs = ['224.0.1.129', '224.0.1.130', '224.0.1.131', '224.0.1.132'];
@@ -16,7 +18,7 @@
 +var syncByte0 = 0x00; // transport-specific nibble from master's Sync
 +var currentUtcOffset = 37; // TAI-UTC offset, updated from Announce messages
 +var grandmasterID = null;
- 
++
 +// Generate clock identity from MAC address (EUI-64 format)
 +var os = require('os');
 +var clockIdentity = Buffer.alloc(8);
@@ -43,7 +45,7 @@
 +	}
 +}
 +var portNumber = 1;
-+
+ 
  //functions
  //creates ptp delay_req buffer
  var ptp_delay_req = function(){
@@ -65,7 +67,7 @@
  	
  	return buffer;
  }
-@@ -61,18 +98,33 @@
+@@ -61,18 +98,33 @@ exports.ptp_master = function(){
  	return ptpMaster;
  }
  
@@ -100,7 +102,7 @@
  });
  
  ptpClientEvent.on('message', function(buffer, remote) {
-@@ -98,6 +150,9 @@
+@@ -98,6 +150,9 @@ ptpClientEvent.on('message', function(buffer, remote) {
  	if(type != 0)//only process sync messages
  		return;
  
@@ -110,7 +112,7 @@
  	//do we have a new ptp master?
  	if(source != ptpMaster){
  		ptpMaster = source;
-@@ -110,7 +165,7 @@
+@@ -110,7 +165,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
  	//check if master is two step or not
  	if((flags & 0x0200) == 0x0200){
  		//two step, wait for follow_up msg for accurate t1
@@ -119,7 +121,7 @@
  	}else if(Date.now() - lastSync > minSyncInterval){
  		//got accurate t1 (no follow_up msg)
  		ts1 = recv_ts;
-@@ -121,7 +176,7 @@
+@@ -121,7 +176,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
  		t1 = [tsS, tsNS];
  
  		//send delay_req
@@ -128,7 +130,7 @@
  			t2 = getCorrectedTime();
  		});
  
-@@ -131,7 +186,7 @@
+@@ -131,7 +186,7 @@ ptpClientEvent.on('message', function(buffer, remote) {
  
  //general msg Client
  ptpClientGeneral.on('listening', function() {
@@ -137,7 +139,7 @@
  });
  
  ptpClientGeneral.on('message', function(buffer, remote) {
-@@ -155,20 +210,34 @@
+@@ -155,20 +210,34 @@ ptpClientGeneral.on('message', function(buffer, remote) {
  	if(version != 2 || domain != ptp_domain)
  		return;
  
