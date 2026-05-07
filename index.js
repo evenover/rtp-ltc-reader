@@ -587,9 +587,11 @@ app.get('/api/ptp', (req, res) => {
   let time = null;
   try { time = ptpv2.ptp_time(); } catch(e) {}
   if (!time) return res.json({ synced: false });
+  const grandmaster = typeof ptpv2.ptp_grandmaster === 'function' ? ptpv2.ptp_grandmaster() : ptpGrandmasterID;
+  const clockIdentity = typeof ptpv2.clock_identity === 'function' ? ptpv2.clock_identity() : ptpClockIdentity;
   const utcOffset = ptpv2.utc_offset() + LEAPSECONDS;
   const epochMs = (time[0] - utcOffset) * 1000 + Math.floor(time[1] / 1e6);
-  res.json({ synced: true, grandmaster: ptpGrandmasterID, clockIdentity: ptpClockIdentity, epoch: epochMs });
+  res.json({ synced: true, grandmaster, clockIdentity, epoch: epochMs });
 });
 
 app.get('/ntp', (req, res) => {
