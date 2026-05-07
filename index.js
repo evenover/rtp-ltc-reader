@@ -672,7 +672,7 @@ app.get('/api/diag', (req, res) => {
       streamActive,
       lastRtpPacketAgo: lastRtpPacket > 0 ? `${((Date.now() - lastRtpPacket) / 1000).toFixed(1)}s ago` : 'never'
     },
-    ptp: { initialized: ptpInitialized, synced: ptpSyncedNow, grandmaster: ptpSyncedNow ? ptpGrandmasterID : null, clockIdentity: ptpClockIdentity },
+    ptp: { initialized: ptpInitialized, synced: ptpSyncedNow, grandmaster: ptpSyncedNow ? (typeof ptpv2.ptp_grandmaster === 'function' ? ptpv2.ptp_grandmaster() : ptpGrandmasterID) : null, clockIdentity: ptpClockIdentity },
     ntp: { synced: ntpSynced, server: NTPSERVER || null },
     hints: [
       !IFACE ? 'IFACE is empty — PTP and multicast may bind to the wrong interface. Set it to the IP of the media network NIC.' : null,
@@ -754,7 +754,7 @@ app.get('/api/status', (req, res) => {
   try { ptpSyncedNow = ptpv2.is_synced(); } catch(e) {}
   res.json({
     stream: streamActive,
-    ptp: { synced: ptpSyncedNow, grandmaster: ptpSyncedNow ? ptpGrandmasterID : null, clockIdentity: ptpClockIdentity },
+    ptp: { synced: ptpSyncedNow, grandmaster: ptpSyncedNow ? (typeof ptpv2.ptp_grandmaster === 'function' ? ptpv2.ptp_grandmaster() : ptpGrandmasterID) : null, clockIdentity: ptpClockIdentity },
     ntp: {
       synced: ntpSynced,
       server: NTPSERVER || null
