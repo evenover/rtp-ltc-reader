@@ -264,8 +264,8 @@ function initPTP() {
     ptpv2.init(IFACE, DOMAIN, () => {
       ptpSynced = true;
       ptpMasterID = ptpv2.ptp_master();
-      ptpGrandmasterID = ptpv2.ptp_grandmaster();
-      ptpClockIdentity = ptpv2.clock_identity();
+      ptpGrandmasterID = typeof ptpv2.ptp_grandmaster === 'function' ? ptpv2.ptp_grandmaster() : null;
+      ptpClockIdentity = typeof ptpv2.clock_identity === 'function' ? ptpv2.clock_identity() : null;
       console.log(`PTP synced to master: ${ptpMasterID}`);
     });
     ptpInitialized = true;
